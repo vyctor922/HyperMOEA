@@ -7,13 +7,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import org.uma.jmetal.algorithm.Algorithm;
+import org.uma.jmetal.algorithm.multiobjective.agemoea.AGEMOEABuilder;
 import org.uma.jmetal.algorithm.multiobjective.agemoeaii.AGEMOEAIIBuilder;
 import org.uma.jmetal.algorithm.multiobjective.espea.ESPEABuilder;
 import org.uma.jmetal.algorithm.multiobjective.gwasfga.GWASFGA;
 import org.uma.jmetal.algorithm.multiobjective.moead.AbstractMOEAD;
 import org.uma.jmetal.algorithm.multiobjective.nsgaii.NSGAIIBuilder;
+import org.uma.jmetal.algorithm.multiobjective.nsgaiii.NSGAIIIBuilder;
 import org.uma.jmetal.algorithm.multiobjective.spea2.SPEA2Builder;
 import org.uma.jmetal.algorithm.multiobjective.moead.MOEADBuilder;
+import org.uma.jmetal.component.algorithm.multiobjective.RVEABuilder; //
+import org.uma.jmetal.util.referencepoint.ReferencePointGenerator;
 import org.uma.jmetal.lab.experiment.Experiment;
 import org.uma.jmetal.lab.experiment.ExperimentBuilder;
 import org.uma.jmetal.lab.experiment.component.impl.ComputeQualityIndicators;
@@ -48,7 +52,10 @@ import org.uma.jmetal.problem.multiobjective.wfg.WFG6;
 import org.uma.jmetal.problem.multiobjective.wfg.WFG7;
 import org.uma.jmetal.problem.multiobjective.wfg.WFG8;
 import org.uma.jmetal.problem.multiobjective.wfg.WFG9;
+import br.usp.lti.newmoea.algorithm.fdea.FDEABuilder; // implementação 
+import org.uma.jmetal.qualityindicator.impl.InvertedGenerationalDistance;
 import org.uma.jmetal.qualityindicator.impl.InvertedGenerationalDistancePlus;
+import org.uma.jmetal.qualityindicator.impl.R2; // 
 import org.uma.jmetal.qualityindicator.impl.hypervolume.impl.PISAHypervolume;
 import org.uma.jmetal.solution.doublesolution.DoubleSolution;
 import org.uma.jmetal.util.comparator.RankingAndCrowdingDistanceComparator;
@@ -78,11 +85,50 @@ import org.uma.jmetal.util.evaluator.impl.SequentialSolutionListEvaluator;
  */
 public class WFGStudy {
 
-    private static final int INDEPENDENT_RUNS = 5;
+    // Permite configurar o número de execuções via JVM: -Druns=5
+    private static final int INDEPENDENT_RUNS = getIndependentRuns();
+    private static int getIndependentRuns() {
+        int runs = Integer.getInteger("runs", 30);
+
+        if (runs <= 0) {
+            throw new IllegalArgumentException(
+                "A propriedade 'runs' deve ser um inteiro positivo."
+            );
+        }
+
+        return runs;
+    }
     public static final int L = 20;
-    public static final int[] M = {2, 3, 5};
-    //int[] M = {2, 3, 5, 8, 10};
-    public static final String experimentBaseDirectory = "/Users/viniciusdecarvalho/PJT/NewMOEA";
+    // public static final int[] M = {2, 3, 5, 8, 10, 15};
+    public static final int[] M = getObjectives();
+
+    private static int[] getObjectives() {
+        String prop = System.getProperty("objectives");
+        if (prop != null && !prop.isBlank()) {
+            return Arrays.stream(prop.split(","))
+                    .map(String::trim)
+                    .mapToInt(Integer::parseInt)
+                    .toArray();
+        }
+        return new int[]{2, 3, 5, 8, 10, 15};
+    }
+
+    private static boolean shouldIncludeProblem(String problemName) {
+        String filter = System.getProperty("problem");
+        if (filter == null || filter.isBlank()) {
+            return true;
+        }
+        return problemName.equalsIgnoreCase(filter) || problemName.startsWith(filter + "_");
+    } // 
+
+    private static void addIfAllowed(List<ExperimentProblem<DoubleSolution>> problemList, ExperimentProblem<DoubleSolution> expProblem) {
+        if (shouldIncludeProblem(expProblem.getTag())) {
+            problemList.add(expProblem);
+        }
+    }
+
+    // Diretório base dinâmico do projeto (portável para Windows, Linux, macOS)
+    public static final String experimentBaseDirectory = System.getProperty("user.dir");
     public static final String StudyName = "WFGStudy";
     public static double epsilon = 0.01;
 
@@ -109,10 +155,12 @@ public class WFGStudy {
                         .setIndicatorList(Arrays.asList(
                                 new PISAHypervolume(),
                                 //new NormalizedHypervolume(),
-                                //new InvertedGenerationalDistance(),
-                                new InvertedGenerationalDistancePlus()))
+                                new InvertedGenerationalDistance(),
+                                new InvertedGenerationalDistancePlus(),
+                                new R2()
+                            ))
                         .setIndependentRuns(INDEPENDENT_RUNS)
-                        .setNumberOfCores(8)
+                        .setNumberOfCores(8) // paralelização em núcleos da CPU
                         .build();
 
         new ExecuteAlgorithms<>(experiment).run();
@@ -123,31 +171,56 @@ public class WFGStudy {
         new GenerateBoxplotsWithR<>(experiment).setRows(3).setColumns(3).setDisplayNotch().run();
     }
 
-    static void addToProblemList(List problemList, int m, int k) {
-        problemList.add(new ExperimentProblem<>(new WFG1(k, L, m), "WFG1_" + m).setReferenceFront("WFG1." + m + "D.csv"));
+    // static void addToProblemList(List problemList, int m, int k) {
+    //     problemList.add(new ExperimentProblem<>(new WFG1(k, L, m), "WFG1_" + m).setReferenceFront("WFG1." + m + "D.csv"));
 
-        problemList.add(new ExperimentProblem<>(new WFG2(k, L, m), "WFG2_" + m).setReferenceFront("WFG2." + m + "D.csv"));
-        problemList.add(new ExperimentProblem<>(new WFG3(k, L, m), "WFG3_" + m).setReferenceFront("WFG3." + m + "D.csv"));
-        problemList.add(new ExperimentProblem<>(new WFG5(k, L, m), "WFG5_" + m).setReferenceFront("WFG5." + m + "D.csv"));
+    //     problemList.add(new ExperimentProblem<>(new WFG2(k, L, m), "WFG2_" + m).setReferenceFront("WFG2." + m + "D.csv"));
+    //     problemList.add(new ExperimentProblem<>(new WFG3(k, L, m), "WFG3_" + m).setReferenceFront("WFG3." + m + "D.csv"));
+    //     problemList.add(new ExperimentProblem<>(new WFG5(k, L, m), "WFG5_" + m).setReferenceFront("WFG5." + m + "D.csv"));
 
-        problemList.add(new ExperimentProblem<>(new WFG4(k, L, m), "WFG4_" + m).setReferenceFront("WFG4." + m + "D.csv"));
+    //     problemList.add(new ExperimentProblem<>(new WFG4(k, L, m), "WFG4_" + m).setReferenceFront("WFG4." + m + "D.csv"));
 
-        problemList.add(new ExperimentProblem<>(new WFG6(k, L, m), "WFG6_" + m).setReferenceFront("WFG6." + m + "D.csv"));
-        problemList.add(new ExperimentProblem<>(new WFG7(k, L, m), "WFG7_" + m).setReferenceFront("WFG7." + m + "D.csv"));
-        problemList.add(new ExperimentProblem<>(new WFG8(k, L, m), "WFG8_" + m).setReferenceFront("WFG8." + m + "D.csv"));
-        problemList.add(new ExperimentProblem<>(new WFG9(k, L, m), "WFG9_" + m).setReferenceFront("WFG9." + m + "D.csv"));
+    //     problemList.add(new ExperimentProblem<>(new WFG6(k, L, m), "WFG6_" + m).setReferenceFront("WFG6." + m + "D.csv"));
+    //     problemList.add(new ExperimentProblem<>(new WFG7(k, L, m), "WFG7_" + m).setReferenceFront("WFG7." + m + "D.csv"));
+    //     problemList.add(new ExperimentProblem<>(new WFG8(k, L, m), "WFG8_" + m).setReferenceFront("WFG8." + m + "D.csv"));
+    //     problemList.add(new ExperimentProblem<>(new WFG9(k, L, m), "WFG9_" + m).setReferenceFront("WFG9." + m + "D.csv"));
+
+    //     // problemList.add(new ExperimentProblem<>(new UF1(k, L, m), "UF1_" + m).setReferenceFront("UF1." + m + "D.csv"));
+    //     // problemList.add(new ExperimentProblem<>(new ZDT1(k, L, m), "ZDT1_" + m).setReferenceFront("ZDT1." + m + "D.csv"));
+
+    //     if (m <= 3) {
+    //         problemList.add(new ExperimentProblem<>(new DTLZ1(L, m), "DTLZ1_" + m).setReferenceFront("DTLZ1." + m + "D.csv"));
+
+    //         problemList.add(new ExperimentProblem<>(new DTLZ2(L, m), "DTLZ2_" + m).setReferenceFront("DTLZ2." + m + "D.csv"));
+    //         problemList.add(new ExperimentProblem<>(new DTLZ3(L, m), "DTLZ3_" + m).setReferenceFront("DTLZ3." + m + "D.csv"));
+    //         problemList.add(new ExperimentProblem<>(new DTLZ4(L, m), "DTLZ4_" + m).setReferenceFront("DTLZ4." + m + "D.csv"));
+    //         problemList.add(new ExperimentProblem<>(new DTLZ5(L, m), "DTLZ5_" + m).setReferenceFront("DTLZ5." + m + "D.csv"));
+    //         problemList.add(new ExperimentProblem<>(new DTLZ6(L, m), "DTLZ6_" + m).setReferenceFront("DTLZ6." + m + "D.csv"));
+    //         problemList.add(new ExperimentProblem<>(new DTLZ7(L, m), "DTLZ7_" + m).setReferenceFront("DTLZ7." + m + "D.csv"));
+    //     }
+
+    // }
+
+    static void addToProblemList(List<ExperimentProblem<DoubleSolution>> problemList, int m, int k) {
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG1(k, L, m), "WFG1_" + m).setReferenceFront("WFG1." + m + "D.csv"));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG2(k, L, m), "WFG2_" + m).setReferenceFront("WFG2." + m + "D.csv"));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG3(k, L, m), "WFG3_" + m).setReferenceFront("WFG3." + m + "D.csv"));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG4(k, L, m), "WFG4_" + m).setReferenceFront("WFG4." + m + "D.csv"));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG5(k, L, m), "WFG5_" + m).setReferenceFront("WFG5." + m + "D.csv"));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG6(k, L, m), "WFG6_" + m).setReferenceFront("WFG6." + m + "D.csv"));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG7(k, L, m), "WFG7_" + m).setReferenceFront("WFG7." + m + "D.csv"));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG8(k, L, m), "WFG8_" + m).setReferenceFront("WFG8." + m + "D.csv"));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG9(k, L, m), "WFG9_" + m).setReferenceFront("WFG9." + m + "D.csv"));
 
         if (m <= 3) {
-            problemList.add(new ExperimentProblem<>(new DTLZ1(L, m), "DTLZ1_" + m).setReferenceFront("DTLZ1." + m + "D.csv"));
-
-            problemList.add(new ExperimentProblem<>(new DTLZ2(L, m), "DTLZ2_" + m).setReferenceFront("DTLZ2." + m + "D.csv"));
-            problemList.add(new ExperimentProblem<>(new DTLZ3(L, m), "DTLZ3_" + m).setReferenceFront("DTLZ3." + m + "D.csv"));
-            problemList.add(new ExperimentProblem<>(new DTLZ4(L, m), "DTLZ4_" + m).setReferenceFront("DTLZ4." + m + "D.csv"));
-            problemList.add(new ExperimentProblem<>(new DTLZ5(L, m), "DTLZ5_" + m).setReferenceFront("DTLZ5." + m + "D.csv"));
-            problemList.add(new ExperimentProblem<>(new DTLZ6(L, m), "DTLZ6_" + m).setReferenceFront("DTLZ6." + m + "D.csv"));
-            problemList.add(new ExperimentProblem<>(new DTLZ7(L, m), "DTLZ7_" + m).setReferenceFront("DTLZ7." + m + "D.csv"));
+            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ1(L, m), "DTLZ1_" + m).setReferenceFront("DTLZ1." + m + "D.csv"));
+            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ2(L, m), "DTLZ2_" + m).setReferenceFront("DTLZ2." + m + "D.csv"));
+            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ3(L, m), "DTLZ3_" + m).setReferenceFront("DTLZ3." + m + "D.csv"));
+            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ4(L, m), "DTLZ4_" + m).setReferenceFront("DTLZ4." + m + "D.csv"));
+            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ5(L, m), "DTLZ5_" + m).setReferenceFront("DTLZ5." + m + "D.csv"));
+            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ6(L, m), "DTLZ6_" + m).setReferenceFront("DTLZ6." + m + "D.csv"));
+            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ7(L, m), "DTLZ7_" + m).setReferenceFront("DTLZ7." + m + "D.csv"));
         }
-
     }
 
     /**
@@ -172,14 +245,52 @@ public class WFGStudy {
                 algorithms.add(new ExperimentAlgorithm<>(buildNSGAII(problem, populationSize, crossover, mutation), problemList.get(i), run));
                 algorithms.add(new ExperimentAlgorithm<>(buildSPEA2(problem, populationSize, crossover, mutation), problemList.get(i), run));
                 algorithms.add(new ExperimentAlgorithm<>(buildMOEADDRA(problem, populationSize, de, mutation), problemList.get(i), run));
+                
+                // 1. NSGA-III: Orientado à qualidade do conjunto por hiperplano de referência
+                algorithms.add(new ExperimentAlgorithm<>(buildNSGAIII(problem, populationSize, crossover, mutation), problemList.get(i), run));
+                // 2. MOEA/DD: Substitui o HypE por instrução do projeto; orientado à qualidade por decomposição + dominância
                 algorithms.add(new ExperimentAlgorithm<>(buildMOEADD(problem, populationSize, crossover, mutation), problemList.get(i), run));
+                // 3. FDEA: Orientado à qualidade do conjunto por dominância fuzzy e autodecomposição
+                algorithms.add(new ExperimentAlgorithm<>(buildFDEA(problem, populationSize, crossover, mutation), problemList.get(i), run)); //
+                // 4. RVEA: Orientado à diversidade geométrica guiada por vetores de referência com APD
+                algorithms.add(new ExperimentAlgorithm<>(buildRVEA(problem, populationSize, crossover, mutation), problemList.get(i), run)); //
+                // 5. AGE-MOEA (padrão): Orientado à diversidade geométrica por estimação adaptativa da fronteira
+                algorithms.add(new ExperimentAlgorithm<>(buildAGEMOEA(problem, populationSize, crossover, mutation), problemList.get(i), run));
+                // 6. AGE-MOEA-II: Variante refinada com geometria adaptativa não-euclidiana
                 algorithms.add(new ExperimentAlgorithm<>(buildAGE2(problem, populationSize, crossover, mutation), problemList.get(i), run));
+
                 algorithms.add(new ExperimentAlgorithm<>(buildESPEA(problem, populationSize, crossover, mutation), problemList.get(i), run));
                 algorithms.add(new ExperimentAlgorithm<>(buidGWASFGA(problem, populationSize, crossover, mutation), problemList.get(i), run));
             }
 
         }
         return algorithms;
+    }
+
+    static Algorithm buildNSGAIII(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
+        int m = problem.numberOfObjectives();
+        int divisions = 12;
+        switch (m) {
+            case 2 -> divisions = 99;
+            case 3 -> divisions = 12;
+            case 5 -> divisions = 6;
+            case 8 -> divisions = 3;
+            case 10 -> divisions = 3;
+            case 15 -> divisions = 2;
+            default -> divisions = 12;
+        }
+
+        SelectionOperator selection = new BinaryTournamentSelection<>(
+                new RankingAndCrowdingDistanceComparator<>());
+
+        NSGAIIIBuilder builder = new NSGAIIIBuilder<>(problem)
+                .setCrossoverOperator(crossover)
+                .setMutationOperator(mutation)
+                .setSelectionOperator(selection)
+                .setMaxIterations(StaticParams.getMaxGenerations(problem.numberOfObjectives(), problem.name()))
+                .setNumberOfDivisions(divisions);
+
+        return builder.build();
     }
 
     static Algorithm buildNSGAII(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
@@ -225,6 +336,18 @@ public class WFGStudy {
         return moead.build();
     }
 
+    static Algorithm buildAGEMOEA(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
+        if (populationSize % 2 != 0) {
+            populationSize++;
+        }
+        AGEMOEABuilder age = new AGEMOEABuilder(problem);
+        age.setMaxIterations(StaticParams.getMaxGenerations(problem.numberOfObjectives(), problem.name()));
+        age.setCrossoverOperator(crossover);
+        age.setMutationOperator(mutation);
+        age.setPopulationSize(populationSize);
+        return age.build();
+    } // 
+
     static Algorithm buildAGE2(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
         if (populationSize % 2 != 0) {
             populationSize++;
@@ -236,6 +359,49 @@ public class WFGStudy {
         age.setPopulationSize(populationSize);
         return age.build();
     }
+
+    static Algorithm buildRVEA(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
+        int m = problem.numberOfObjectives();
+        int maxEvaluations = StaticParams.getMaxGenerations(m, problem.name()) * populationSize;
+        List<double[]> referenceVectors;
+        switch (m) {
+            case 2 -> referenceVectors = ReferencePointGenerator.generateSingleLayer(2, 99);
+            case 3 -> referenceVectors = ReferencePointGenerator.generateSingleLayer(3, 12);
+            case 5 -> referenceVectors = ReferencePointGenerator.generateSingleLayer(5, 6);
+            case 8 -> referenceVectors = ReferencePointGenerator.generateTwoLayers(8, 3, 2);
+            case 10 -> referenceVectors = ReferencePointGenerator.generateTwoLayers(10, 3, 2);
+            case 15 -> referenceVectors = ReferencePointGenerator.generateTwoLayers(15, 2, 1);
+            default -> referenceVectors = ReferencePointGenerator.generateSingleLayer(m, 12);
+        }
+        double alpha = 2.0;
+        double fr = 0.1;
+        RVEABuilder<DoubleSolution> builder = new RVEABuilder<>(
+                problem,
+                referenceVectors.size(),
+                maxEvaluations,
+                crossover,
+                mutation,
+                alpha,
+                fr,
+                referenceVectors
+        );
+        return builder.build();
+    } //
+
+    static Algorithm buildFDEA(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
+        int maxGenerations = StaticParams.getMaxGenerations(problem.numberOfObjectives(), problem.name());
+        int maxEvaluations = maxGenerations * populationSize;
+        SelectionOperator selection = new BinaryTournamentSelection<>(
+                new RankingAndCrowdingDistanceComparator<>());
+        return new FDEABuilder(problem)
+                .setPopulationSize(populationSize)
+                .setMaxGenerations(maxGenerations)
+                .setMaxEvaluations(maxEvaluations)
+                .setCrossoverOperator(crossover)
+                .setMutationOperator(mutation)
+                .setSelectionOperator(selection)
+                .build();
+    } //
 
     static Algorithm buildMOEADD(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
         MOEADBuilder moead = new MOEADBuilder(problem, MOEADBuilder.Variant.MOEADD)
@@ -258,8 +424,7 @@ public class WFGStudy {
         SelectionOperator<List<DoubleSolution>, DoubleSolution> selectionOperator = new BinaryTournamentSelection<>(
                 new RankingAndCrowdingDistanceComparator<>());
         String dataFileName;
-        dataFileName = "W" + problem.numberOfObjectives() + "D_"
-                + populationSize + ".dat";
+        dataFileName = "W" + problem.numberOfObjectives() + "D_" + populationSize + ".dat"; // nome dos arquivos de pesos (seria bom ter problema e nome do algoritmo)
         return new GWASFGA(problem, populationSize, StaticParams.getMaxGenerations(problem.numberOfObjectives(), problem.name()), crossover, mutation, selectionOperator, evaluator, epsilon, "MOEAD_Weights/" + dataFileName);
 
     }

@@ -8,6 +8,30 @@ public class StaticParams {
 
     public static int getMaxGenerations(int m, String problem) {
         switch (m) {
+            case 2:
+                switch (problem) {
+                    case "DTLZ1" -> {
+                        return 400; // DTLZ1
+                    }
+                    case "DTLZ2" -> {
+                        return 250; // DTLZ2
+                    }
+                    case "DTLZ3" -> {
+                        return 1000; // DTLZ3
+                    }
+                    case "DTLZ4" -> {
+                        return 600; // DTLZ4
+                    }
+                    case "DTLZ7" -> {
+                        return 1000; // DTLZ7
+                    }
+                    case "WFG1", "WFG2", "WFG3", "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9" -> {
+                        return 250; // WFG 2-obj
+                    }
+                    default -> {
+                        return 1000;
+                    }
+                }
             case 3:
                 switch (problem) {
                     case "DTLZ1" -> {

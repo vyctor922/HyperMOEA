@@ -74,20 +74,20 @@ latexTail <- function() {
 
 ### START OF SCRIPT 
 # Constants
-problemList <-c("WFG1_2", "WFG2_2", "WFG3_2", "WFG5_2", "WFG4_2", "WFG6_2", "WFG7_2", "WFG8_2", "WFG9_2", "DTLZ1_2", "DTLZ2_2", "DTLZ3_2", "DTLZ4_2", "DTLZ5_2", "DTLZ6_2", "DTLZ7_2", "WFG1_3", "WFG2_3", "WFG3_3", "WFG5_3", "WFG4_3", "WFG6_3", "WFG7_3", "WFG8_3", "WFG9_3", "DTLZ1_3", "DTLZ2_3", "DTLZ3_3", "DTLZ4_3", "DTLZ5_3", "DTLZ6_3", "DTLZ7_3", "WFG1_5", "WFG2_5", "WFG3_5", "WFG5_5", "WFG4_5", "WFG6_5", "WFG7_5", "WFG8_5", "WFG9_5") 
-algorithmList <-c("NSGAII", "SPEA2", "MOEADDRA", "MOEADD", "AGE-MOEA-II", "ESPEA", "GWASFGA") 
-tabularString <-c("lcccccc") 
-latexTableFirstLine <-c("\\hline  & SPEA2 & MOEADDRA & MOEADD & AGE-MOEA-II & ESPEA & GWASFGA\\\\ ") 
+problemList <-c("WFG1_2") 
+algorithmList <-c("NSGAII", "SPEA2", "MOEADDRA", "NSGAIII", "MOEADD", "FDEA", "RVEA", "AGE-MOEA", "AGE-MOEA-II", "ESPEA", "GWASFGA") 
+tabularString <-c("lcccccccccc") 
+latexTableFirstLine <-c("\\hline  & SPEA2 & MOEADDRA & NSGAIII & MOEADD & FDEA & RVEA & AGE-MOEA & AGE-MOEA-II & ESPEA & GWASFGA\\\\ ") 
 indicator<-"IGD+"
 
  # Step 1.  Writes the latex header
 latexHeader()
-tabularString <-c("| l | ccccccccccccccccccccccccccccccccccccccccc | ccccccccccccccccccccccccccccccccccccccccc | ccccccccccccccccccccccccccccccccccccccccc | ccccccccccccccccccccccccccccccccccccccccc | ccccccccccccccccccccccccccccccccccccccccc | ccccccccccccccccccccccccccccccccccccccccc | ") 
+tabularString <-c("| l | c | c | c | c | c | c | c | c | c | c | ") 
 
-latexTableFirstLine <-c("\\hline \\multicolumn{1}{|c|}{} & \\multicolumn{41}{c|}{SPEA2} & \\multicolumn{41}{c|}{MOEADDRA} & \\multicolumn{41}{c|}{MOEADD} & \\multicolumn{41}{c|}{AGE-MOEA-II} & \\multicolumn{41}{c|}{ESPEA} & \\multicolumn{41}{c|}{GWASFGA} \\\\") 
+latexTableFirstLine <-c("\\hline \\multicolumn{1}{|c|}{} & \\multicolumn{1}{c|}{SPEA2} & \\multicolumn{1}{c|}{MOEADDRA} & \\multicolumn{1}{c|}{NSGAIII} & \\multicolumn{1}{c|}{MOEADD} & \\multicolumn{1}{c|}{FDEA} & \\multicolumn{1}{c|}{RVEA} & \\multicolumn{1}{c|}{AGE-MOEA} & \\multicolumn{1}{c|}{AGE-MOEA-II} & \\multicolumn{1}{c|}{ESPEA} & \\multicolumn{1}{c|}{GWASFGA} \\\\") 
 
 # Step 3. Problem loop 
-latexTableHeader("WFG1_2 WFG2_2 WFG3_2 WFG5_2 WFG4_2 WFG6_2 WFG7_2 WFG8_2 WFG9_2 DTLZ1_2 DTLZ2_2 DTLZ3_2 DTLZ4_2 DTLZ5_2 DTLZ6_2 DTLZ7_2 WFG1_3 WFG2_3 WFG3_3 WFG5_3 WFG4_3 WFG6_3 WFG7_3 WFG8_3 WFG9_3 DTLZ1_3 DTLZ2_3 DTLZ3_3 DTLZ4_3 DTLZ5_3 DTLZ6_3 DTLZ7_3 WFG1_5 WFG2_5 WFG3_5 WFG5_5 WFG4_5 WFG6_5 WFG7_5 WFG8_5 WFG9_5 ", tabularString, latexTableFirstLine)
+latexTableHeader("WFG1_2 ", tabularString, latexTableFirstLine)
 
 indx = 0
 for (i in algorithmList) {
@@ -105,7 +105,7 @@ for (i in algorithmList) {
           else {
             write("  ", "IGD+.Wilcoxon.tex", append=TRUE)
           } 
-          if (problem == "WFG9_5") {
+          if (problem == "WFG1_2") {
             if (j == "GWASFGA") {
               write(" \\\\ ", "IGD+.Wilcoxon.tex", append=TRUE)
             } 
