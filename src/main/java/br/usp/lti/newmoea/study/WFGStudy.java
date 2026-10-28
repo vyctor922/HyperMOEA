@@ -52,10 +52,10 @@ import org.uma.jmetal.problem.multiobjective.wfg.WFG6;
 import org.uma.jmetal.problem.multiobjective.wfg.WFG7;
 import org.uma.jmetal.problem.multiobjective.wfg.WFG8;
 import org.uma.jmetal.problem.multiobjective.wfg.WFG9;
-import br.usp.lti.newmoea.algorithm.fdea.FDEABuilder; // implementação 
+import br.usp.lti.newmoea.algorithm.fdea.FDEABuilder; // implementação
 import org.uma.jmetal.qualityindicator.impl.InvertedGenerationalDistance;
 import org.uma.jmetal.qualityindicator.impl.InvertedGenerationalDistancePlus;
-import org.uma.jmetal.qualityindicator.impl.R2; // 
+import org.uma.jmetal.qualityindicator.impl.R2; //
 import org.uma.jmetal.qualityindicator.impl.hypervolume.impl.PISAHypervolume;
 import org.uma.jmetal.solution.doublesolution.DoubleSolution;
 import org.uma.jmetal.util.comparator.RankingAndCrowdingDistanceComparator;
@@ -119,7 +119,7 @@ public class WFGStudy {
             return true;
         }
         return problemName.equalsIgnoreCase(filter) || problemName.startsWith(filter + "_");
-    } // 
+    } //
 
     private static void addIfAllowed(List<ExperimentProblem<DoubleSolution>> problemList, ExperimentProblem<DoubleSolution> expProblem) {
         if (shouldIncludeProblem(expProblem.getTag())) {
@@ -238,14 +238,14 @@ public class WFGStudy {
                 int populationSize = StaticParams.getPopulationSize(problemList.get(i).getProblem().numberOfObjectives());
                 Problem problem = problemList.get(i).getProblem();
 
-                CrossoverOperator crossover = new SBXCrossover(1.0, 20.0);
+                CrossoverOperator crossover = new SBXCrossover(1.0, 30.0);
                 MutationOperator mutation = new PolynomialMutation(1.0 / problem.numberOfVariables(), 20.0);
                 CrossoverOperator de = new DifferentialEvolutionCrossover();
 
                 algorithms.add(new ExperimentAlgorithm<>(buildNSGAII(problem, populationSize, crossover, mutation), problemList.get(i), run));
                 algorithms.add(new ExperimentAlgorithm<>(buildSPEA2(problem, populationSize, crossover, mutation), problemList.get(i), run));
                 algorithms.add(new ExperimentAlgorithm<>(buildMOEADDRA(problem, populationSize, de, mutation), problemList.get(i), run));
-                
+
                 // 1. NSGA-III: Orientado à qualidade do conjunto por hiperplano de referência
                 algorithms.add(new ExperimentAlgorithm<>(buildNSGAIII(problem, populationSize, crossover, mutation), problemList.get(i), run));
                 // 2. MOEA/DD: Substitui o HypE por instrução do projeto; orientado à qualidade por decomposição + dominância
@@ -269,15 +269,16 @@ public class WFGStudy {
 
     static Algorithm buildNSGAIII(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
         int m = problem.numberOfObjectives();
-        int divisions = 12;
+        int outerDivisions = 12;
+        int innerDivisions = 2;
         switch (m) {
-            case 2 -> divisions = 99;
-            case 3 -> divisions = 12;
-            case 5 -> divisions = 6;
-            case 8 -> divisions = 3;
-            case 10 -> divisions = 3;
-            case 15 -> divisions = 2;
-            default -> divisions = 12;
+            case 2 -> outerDivisions = 99;
+            case 3 -> outerDivisions = 12;
+            case 5 -> outerDivisions = 6;
+            case 8 -> { outerDivisions = 3; innerDivisions = 2; }
+            case 10 -> { outerDivisions = 3; innerDivisions = 2; }
+            case 15 -> { outerDivisions = 2; innerDivisions = 1; }
+            default -> outerDivisions = 12;
         }
 
         SelectionOperator selection = new BinaryTournamentSelection<>(
@@ -288,7 +289,13 @@ public class WFGStudy {
                 .setMutationOperator(mutation)
                 .setSelectionOperator(selection)
                 .setMaxIterations(StaticParams.getMaxGenerations(problem.numberOfObjectives(), problem.name()))
-                .setNumberOfDivisions(divisions);
+                .setNumberOfDivisions(outerDivisions);
+                // .setSecondLayerDivisions(divisions - 1); 
+
+        // para problemas com mais de 3 objetivos, usar duas camadas de pontos de referência
+        if (innerDivisions > 0) {
+            builder.setSecondLayerDivisions(innerDivisions);
+        }
 
         return builder.build();
     }
@@ -346,7 +353,7 @@ public class WFGStudy {
         age.setMutationOperator(mutation);
         age.setPopulationSize(populationSize);
         return age.build();
-    } // 
+    } //
 
     static Algorithm buildAGE2(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
         if (populationSize % 2 != 0) {
@@ -413,8 +420,10 @@ public class WFGStudy {
                 .setNeighborhoodSelectionProbability(0.9)
                 .setMaximumNumberOfReplacedSolutions(2)
                 .setNeighborSize(20)
-                .setDataDirectory("MOEAD_Weights")
+                .setDataDirectory("MOEAD_Weights") // setar pontos segundo a bibliografia
                 .setFunctionType(AbstractMOEAD.FunctionType.PBI);
+                // validateMoeadWeightFile("MOEAD_Weights", problem, populationSize);
+
 
         return moead.build();
     }

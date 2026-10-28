@@ -85,7 +85,7 @@ O pipeline pós-processamento e os testes unitários avaliam as aproximações d
 3. **IGD+ (`org.uma.jmetal.qualityindicator.impl.InvertedGenerationalDistancePlus`)**:
    - Distância modificada que penaliza apenas soluções dominadas ou piores que a referência, garantindo monotonicidade com dominância de Pareto.
    - Menor valor indica melhor aproximação.
-4. **Hipervolume ($HV$, via `PISAHypervolume`)**:
+4. **Hipervolume ($HV$)**:
    - Volume do espaço de objetivos dominado pela população obtida em relação a um ponto de referência.
    - Maior valor indica melhor desempenho.
    - *Limitação Computacional*: O cálculo exato possui complexidade exponencial com o número de objetivos. Para dimensões elevadas ($m \ge 8$), prioriza-se a avaliação por $R^2$, $IGD^+$ e IGD, reservando aproximações de Monte Carlo quando o cálculo exato se torna proibitivo.
@@ -252,6 +252,9 @@ Abaixo estão registradas todas as intervenções de engenharia de software e aj
 
 ## 8. Atividades Reservadas para a Próxima Etapa
 Conforme definido no planejamento:
-1. Conexão entre o sinal de retroalimentação escalar ($\Delta R^2$ fornecido por `R2ExecutionObserver`) e a lógica de seleção de heurísticas de baixo nível das hiper-heurísticas (AdapHH, EA-ILS e LAST-RL).
-2. Construção do pipeline de orquestração adaptativa que invoca sucessivamente os MOEAs ou seus operadores conforme as decisões da hiper-heurística.
-3. Comparação sistemática a posteriori do desempenho dos algoritmos guiados por hiper-heurísticas frente aos MOEAs isolados.
+1. Ajustar os paramêtros e hiperparâmetros para aqueles definidos pela bibliografia, sejam específicos de algoritmos, como pontos de referências/divisões a detalhes comuns de algoritmos geneticos como população (os comuns devem ser baseados no algoritmo mais recente, já os especificos devem ser aqueles que seus artigos usaram).
+2. Escolher hipervolume a ser implementado tanto o aproximado como o real, utilizando aqueles mais indicados ou mais utilizados por aqueles que fizeram artigos (para facilitar a justificativa do seu uso preterindo outros).
+<br><br>
+3. Conexão entre o sinal de retroalimentação escalar ($\Delta R^2$ fornecido por `R2ExecutionObserver`) e a lógica de seleção de heurísticas de baixo nível das hiper-heurísticas (AdapHH, EA-ILS e LAST-RL).
+4. Construção do pipeline de orquestração adaptativa sobre os operadores dos MOEAs conforme as decisões da hiper-heurística.
+5. Comparação sistemática a posteriori do desempenho dos algoritmos guiados por hiper-heurísticas frente aos MOEAs isolados.
