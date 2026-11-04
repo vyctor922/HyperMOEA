@@ -1,4 +1,4 @@
-# NewMOEA — Framework Experimental de Otimização Multi-objetivo e Hiper-heurísticas
+# hypeMOEA — Framework Experimental de Otimização Multi-objetivo e Hiper-heurísticas
 
 Este projeto consiste em um ambiente experimental construído sobre o ecossistema do **jMetal 7.8** em **Java 21 (LTS)**, voltado à avaliação empírica de Algoritmos Evolutivos Multi-objetivo (MOEAs), problemas com muitos objetivos (MaOOPs) e à **adaptação e integração de mecanismos de hiper-heurísticas mono-objetivo para o gerenciamento de otimizadores no contexto multi-objetivo**.
 
@@ -62,8 +62,8 @@ Esta vertente preserva a diversidade recorrendo a grandezas geométricas contín
 * **AGE-MOEA** (*Panichella, 2019*): Adaptive Geometry Estimation-based Many-objective Evolutionary Algorithm. Estima adaptativamente o formato e a curvatura $p$ da Fronteira de Pareto durante a busca a partir de pontos extremos, calculando escores de sobrevivência com base em proximidade geodésica. Reutilizado nativamente do jMetal 7.8 (`org.uma.jmetal.algorithm.multiobjective.agemoea.AGEMOEABuilder`).
 * **AGE-MOEA-II** (*Panichella, 2020*): Variante refinada do AGE-MOEA que aprimora o cálculo de proximidade e diversidade em variedades não-euclidianas de alta dimensão. Reutilizado nativamente do jMetal 7.8 (`org.uma.jmetal.algorithm.multiobjective.agemoeaii.AGEMOEAIIBuilder`).
 
-### 2.3 Algoritmos Complementares de Linha de Base (Baselines)
-Para fins de controle experimental e validação estatística, o ambiente mantém:
+### 2.3 Algoritmos Complementares
+Para fins de controle experimental de experimentos passados que já terminaram e validação estatística, o ambiente mantém:
 * **MOEA/D-DRA**: MOEA/D com alocação dinâmica de recursos baseada em histórico de sucesso por subproblema.
 * **NSGA-II** e **SPEA2**: Referências clássicas de ordenação por dominância e distância de aglomeração/força de Pareto.
 * **ESPEA**: Algoritmo baseado no conceito de equilíbrio termodinâmico e entropia de Pareto.
@@ -74,7 +74,6 @@ Para fins de controle experimental e validação estatística, o ambiente manté
 ## 3 Indicadores de Qualidade
 
 O pipeline pós-processamento e os testes unitários avaliam as aproximações de Pareto por meio de quatro indicadores:
-
 1. **$R^2$ (`org.uma.jmetal.qualityindicator.impl.R2`)**:
    - Função utilitária de Tchebycheff com vetores de peso uniformes e ponto ideal $z^*$.
    - Menor valor indica melhor aproximação.
@@ -112,10 +111,10 @@ O estudo contempla as dimensões $m \in \{2, 3, 5, 8, 10, 15\}$, com parâmetros
 ## 5. Estrutura de Diretórios do Projeto
 
 ```text
-NewMOEA/
+hypeMOEA/
 ├── pom.xml                                     ← Configuração Maven (Java 21, jMetal 7.8, JUnit 5)
 ├── README.md                                   ← Documentação detalhada
-├── MOEAD_Weights/                              ← Vetores de peso (.dat) para MOEA/D e GWASFGA
+├── MOEAD_Weights/                              ← Vetores de peso (.dat) para MOEA/DD
 ├── pareto_fronts/csv/                          ← Frentes de referência analíticas em CSV (WFG1-9, DTLZ1-7)
 └── src/
     ├── main/java/
@@ -176,7 +175,7 @@ Para validar o pipeline completo em poucos segundos com 1 repetição, 2 objetiv
 ```bash
 mvn exec:java -Dexec.mainClass="br.usp.lti.newmoea.study.WFGStudy" -Druns=1 -Dobjectives=2 -Dproblem=WFG1
 ```
-Esse comando instancia os algoritmos (incluindo MOEA/DD, FDEA, RVEA, AGE-MOEA, AGE-MOEA-II, NSGA-III e baselines), gera as frentes `FUN0.csv`, calcula $HV$, $IGD$, $IGD^+$, $R^2$ e cria as tabelas estatísticas em `WFGStudy/`.
+Esse comando instancia os algoritmos (incluindo MOEA/DD, FDEA, RVEA, AGE-MOEA, AGE-MOEA-II, NSGA-III e algoritmos complementares antigos), gera as frentes `FUN0.csv`, calcula $HV$, $IGD$, $IGD^+$, $R^2$ e cria as tabelas estatísticas em `WFGStudy/`.
 
 Você pode variar o problema ou as dimensões via propriedades JVM:
 ```bash
@@ -228,6 +227,17 @@ Abaixo estão registradas todas as intervenções de engenharia de software e aj
 5. **Adequação ao Padrão Estatístico (30 Runs)**:
    * O padrão foi mudado de 5 para 30 execuções independentes (`INDEPENDENT_RUNS = 30`), com suporte a sobreposição transparente via linha de comando (`-Druns=N`).
 
+## Estado do Projeto na Fase 1
+- Pipeline principal: `src/main/java/br/usp/lti/newmoea/study/WFGStudy.java`.
+- Parâmetros estáticos e fábricas de referência: `src/main/java/br/usp/lti/newmoea/study/StaticParams.java`.
+- Validadores matemáticos e analíticos:
+  - `src/main/java/br/usp/lti/newmoea/util/ReferenceSetValidator.java`
+  - `src/main/java/br/usp/lti/newmoea/util/ParetoFrontValidator.java`
+- Indicadores configurados: `PISAHypervolume` (`HV`, métrica primária de maximização), `NormalizedHypervolume` (`NHV`, métrica secundária de minimização), `InvertedGenerationalDistance` (`IGD`), `InvertedGenerationalDistancePlus` (`IGD+`) e `R2`.
+
+## Decisões técnicas consolidadas na Fase 1
+1. Populações canônicas por $m$: 100 ($m=2$), 91 ($m=3$), 210 ($m=5$)
+
 ### Alterações 21/10/2026 - 09:00
 
 1. **Migração do Ambiente para JDK 21 e jMetal 7.8**:
@@ -254,7 +264,9 @@ Abaixo estão registradas todas as intervenções de engenharia de software e aj
 Conforme definido no planejamento:
 1. Ajustar os paramêtros e hiperparâmetros para aqueles definidos pela bibliografia, sejam específicos de algoritmos, como pontos de referências/divisões a detalhes comuns de algoritmos geneticos como população (os comuns devem ser baseados no algoritmo mais recente, já os especificos devem ser aqueles que seus artigos usaram).
 2. Escolher hipervolume a ser implementado tanto o aproximado como o real, utilizando aqueles mais indicados ou mais utilizados por aqueles que fizeram artigos (para facilitar a justificativa do seu uso preterindo outros).
+3. Planejamento e execução dos experimentos em larga escala (Execução Completa).
+4. Realizar análise estatística e pós-processamento dos dados (após execução completa)
 <br><br>
-3. Conexão entre o sinal de retroalimentação escalar ($\Delta R^2$ fornecido por `R2ExecutionObserver`) e a lógica de seleção de heurísticas de baixo nível das hiper-heurísticas (AdapHH, EA-ILS e LAST-RL).
-4. Construção do pipeline de orquestração adaptativa sobre os operadores dos MOEAs conforme as decisões da hiper-heurística.
-5. Comparação sistemática a posteriori do desempenho dos algoritmos guiados por hiper-heurísticas frente aos MOEAs isolados.
+5. Conexão entre o sinal de retroalimentação escalar ($\Delta R^2$ fornecido por `R2ExecutionObserver`) e a lógica de seleção de heurísticas de baixo nível das hiper-heurísticas (AdapHH, EA-ILS e LAST-RL).
+6. Construção do pipeline de orquestração adaptativa sobre os operadores dos MOEAs conforme as decisões da hiper-heurística.
+7. Comparação sistemática a posteriori do desempenho dos algoritmos guiados por hiper-heurísticas frente aos MOEAs isolados.

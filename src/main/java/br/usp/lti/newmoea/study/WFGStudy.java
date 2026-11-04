@@ -2,6 +2,7 @@ package br.usp.lti.newmoea.study;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -53,8 +54,10 @@ import org.uma.jmetal.problem.multiobjective.wfg.WFG7;
 import org.uma.jmetal.problem.multiobjective.wfg.WFG8;
 import org.uma.jmetal.problem.multiobjective.wfg.WFG9;
 import br.usp.lti.newmoea.algorithm.fdea.FDEABuilder; // implementação
+import br.usp.lti.newmoea.util.ReferenceSetValidator;
 import org.uma.jmetal.qualityindicator.impl.InvertedGenerationalDistance;
 import org.uma.jmetal.qualityindicator.impl.InvertedGenerationalDistancePlus;
+import org.uma.jmetal.qualityindicator.impl.NormalizedHypervolume;
 import org.uma.jmetal.qualityindicator.impl.R2; //
 import org.uma.jmetal.qualityindicator.impl.hypervolume.impl.PISAHypervolume;
 import org.uma.jmetal.solution.doublesolution.DoubleSolution;
@@ -132,6 +135,15 @@ public class WFGStudy {
     public static final String StudyName = "WFGStudy";
     public static double epsilon = 0.01;
 
+    /**
+     * Tolerância de soma para validação dos arquivos de pesos do MOEA/DD (acolhe a substituição
+     * \(0 \mapsto 10^{-5}\) presente em {@code MOEAD_Weights/}, cujo desvio máximo é \(14 \times 10^{-5}\) em \(m=15\)).
+     */
+    public static final double MOEAD_WEIGHT_SUM_TOLERANCE = 2e-4;
+
+    /** Tolerância euclidiana para detecção de vetores duplicados nos arquivos de pesos do MOEA/DD. */
+    public static final double MOEAD_WEIGHT_DUPLICATE_TOLERANCE = 1e-7;
+
     public static void main(String[] args) throws IOException {
         Files.createDirectories(Paths.get(experimentBaseDirectory + "/" + StudyName));
         List<ExperimentProblem<DoubleSolution>> problemList = new ArrayList<>();
@@ -154,10 +166,18 @@ public class WFGStudy {
                         .setOutputParetoSetFileName("VAR")
                         .setIndicatorList(Arrays.asList(
                                 new PISAHypervolume(),
-                                //new NormalizedHypervolume(),
+                                new NormalizedHypervolume(),
                                 new InvertedGenerationalDistance(),
                                 new InvertedGenerationalDistancePlus(),
-                                new R2()
+                                new R2() {
+                                    @Override
+                                    public void referenceFront(double[][] referenceFront) {
+                                        super.referenceFront(referenceFront);
+                                        // Garante que weightVectors e idealPoint sejam recalculados quando a dimensão m muda entre problemas
+                                        setWeightVectors(null);
+                                        setIdealPoint(null);
+                                    }
+                                }
                             ))
                         .setIndependentRuns(INDEPENDENT_RUNS)
                         .setNumberOfCores(8) // paralelização em núcleos da CPU
@@ -238,6 +258,7 @@ public class WFGStudy {
                 int populationSize = StaticParams.getPopulationSize(problemList.get(i).getProblem().numberOfObjectives());
                 Problem problem = problemList.get(i).getProblem();
 
+                // Operadores
                 CrossoverOperator crossover = new SBXCrossover(1.0, 30.0);
                 MutationOperator mutation = new PolynomialMutation(1.0 / problem.numberOfVariables(), 20.0);
                 CrossoverOperator de = new DifferentialEvolutionCrossover();
@@ -267,18 +288,17 @@ public class WFGStudy {
         return algorithms;
     }
 
-    static Algorithm buildNSGAIII(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
+    public static Algorithm buildNSGAIII(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
         int m = problem.numberOfObjectives();
-        int outerDivisions = 12;
-        int innerDivisions = 2;
-        switch (m) {
-            case 2 -> outerDivisions = 99;
-            case 3 -> outerDivisions = 12;
-            case 5 -> outerDivisions = 6;
-            case 8 -> { outerDivisions = 3; innerDivisions = 2; }
-            case 10 -> { outerDivisions = 3; innerDivisions = 2; }
-            case 15 -> { outerDivisions = 2; innerDivisions = 1; }
-            default -> outerDivisions = 12;
+        int outerDivisions = StaticParams.getOuterDivisions(m);
+        int innerDivisions = StaticParams.getInnerDivisions(m);
+
+        int expectedPoints = ReferenceSetValidator.expectedTwoLayerPoints(m, outerDivisions, innerDivisions);
+        if (populationSize != expectedPoints) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "Inconsistência na configuração do NSGA-III para m=%d: populationSize=%d difere do total de pontos de referência esperados=%d (H1=%d, H2=%d).",
+                            m, populationSize, expectedPoints, outerDivisions, innerDivisions));
         }
 
         SelectionOperator selection = new BinaryTournamentSelection<>(
@@ -290,9 +310,8 @@ public class WFGStudy {
                 .setSelectionOperator(selection)
                 .setMaxIterations(StaticParams.getMaxGenerations(problem.numberOfObjectives(), problem.name()))
                 .setNumberOfDivisions(outerDivisions);
-                // .setSecondLayerDivisions(divisions - 1); 
 
-        // para problemas com mais de 3 objetivos, usar duas camadas de pontos de referência
+        // para problemas com mais de 5 objetivos (m in {8, 10, 15}), usar duas camadas explícitas de pontos de referência
         if (innerDivisions > 0) {
             builder.setSecondLayerDivisions(innerDivisions);
         }
@@ -328,6 +347,7 @@ public class WFGStudy {
     }
 
     static Algorithm buildMOEADDRA(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
+        validateMoeadWeightFile("MOEAD_Weights", problem, populationSize);
         MOEADBuilder moead = new MOEADBuilder(problem, MOEADBuilder.Variant.MOEADDRA)
                 .setCrossover(crossover)
                 .setMutation(mutation)
@@ -410,7 +430,11 @@ public class WFGStudy {
                 .build();
     } //
 
-    static Algorithm buildMOEADD(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
+    public static Algorithm buildMOEADD(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
+        validateMoeadWeightFile("MOEAD_Weights", problem, populationSize);
+
+        // Nota sobre PBI no jMetal 7.8: AbstractMOEAD.fitnessFunction fixa internamente theta = 5.0
+        // para FunctionType.PBI, e MOEADBuilder não expõe setter para theta.
         MOEADBuilder moead = new MOEADBuilder(problem, MOEADBuilder.Variant.MOEADD)
                 .setCrossover(crossover)
                 .setMutation(mutation)
@@ -422,10 +446,33 @@ public class WFGStudy {
                 .setNeighborSize(20)
                 .setDataDirectory("MOEAD_Weights") // setar pontos segundo a bibliografia
                 .setFunctionType(AbstractMOEAD.FunctionType.PBI);
-                // validateMoeadWeightFile("MOEAD_Weights", problem, populationSize);
-
 
         return moead.build();
+    }
+
+    /**
+     * Valida explicitamente a existência, quantidade de vetores, dimensionalidade, finitude,
+     * não-negatividade, soma no simplex e ausência de duplicatas do arquivo de pesos do MOEA/DD
+     * ({@code W{m}D_{populationSize}.dat}) antes de instanciar ou executar o algoritmo.
+     *
+     * @param dataDirectory diretório onde os arquivos {@code .dat} estão armazenados
+     * @param problem problema multiobjetivo alvo
+     * @param populationSize tamanho da população (deve coincidir com o número de vetores de pesos)
+     * @return matriz {@code double[populationSize][m]} com os vetores de pesos validados
+     * @throws IllegalArgumentException se o arquivo não existir ou violar qualquer critério matemático
+     */
+    public static double[][] validateMoeadWeightFile(String dataDirectory, Problem<?> problem, int populationSize) {
+        if (problem == null) {
+            throw new IllegalArgumentException("O problema não pode ser nulo na validação de pesos do MOEA/DD.");
+        }
+        int m = problem.numberOfObjectives();
+        Path weightPath = Paths.get(dataDirectory, "W" + m + "D_" + populationSize + ".dat");
+        return ReferenceSetValidator.validateMoeadWeightFile(
+                weightPath,
+                m,
+                populationSize,
+                MOEAD_WEIGHT_SUM_TOLERANCE,
+                MOEAD_WEIGHT_DUPLICATE_TOLERANCE);
     }
 
     static Algorithm buidGWASFGA(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
