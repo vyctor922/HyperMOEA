@@ -4,18 +4,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import br.usp.lti.newmoea.study.StaticParams;
+import br.usp.lti.newmoea.study.WFGStudy;
 import br.usp.lti.newmoea.util.ReferenceSetValidator;
+import br.usp.lti.newmoea.util.ReferenceSetValidator.ReferencePersistenceReport;
 import br.usp.lti.newmoea.util.ReferenceSetValidator.SetComparisonReport;
 import br.usp.lti.newmoea.util.ReferenceSetValidator.SetValidationReport;
 import br.usp.lti.newmoea.util.ReferenceSetValidator.Verdict;
+import java.io.IOException;
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -334,6 +342,229 @@ class NsgaIIIReferencePointsValidationTest {
         assertThatThrownBy(() -> ReferenceSetValidator.assertValidSimplexSet(duplicateSet, 2, 3, TOLERANCE))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("duplicates=1");
+    }
+
+    @Test
+    @DisplayName("T07.1: Validação separada das camadas externa (H1) e interna (H2) do NSGAIIIBuilder para m in {8, 10, 15}")
+    void testT07SeparateOuterAndInnerLayersInNsgaIIIBuilder() throws Exception {
+        int[][] twoLayerConfigs = {
+            {8, 3, 2, 120, 36, 156},
+            {10, 3, 2, 220, 55, 275},
+            {15, 2, 1, 120, 15, 135}
+        };
+
+        for (int[] cfg : twoLayerConfigs) {
+            int m = cfg[0];
+            int h1 = cfg[1];
+            int h2 = cfg[2];
+            int expectedOuter = cfg[3];
+            int expectedInner = cfg[4];
+            int expectedTotal = cfg[5];
+
+            Problem<DoubleSolution> problem = new WFG1(2 * (m - 1), 20, m);
+            NSGAIII<DoubleSolution> nsgaiii = new NSGAIIIBuilder<>(problem)
+                    .setCrossoverOperator(new SBXCrossover(1.0, 30.0))
+                    .setMutationOperator(new PolynomialMutation(1.0 / problem.numberOfVariables(), 20.0))
+                    .setSelectionOperator(new BinaryTournamentSelection<>(new RankingAndCrowdingDistanceComparator<>()))
+                    .setMaxIterations(1)
+                    .setNumberOfDivisions(h1)
+                    .setSecondLayerDivisions(h2)
+                    .build();
+
+            double[][] allActualPoints = extractReferencePointsFromNsgaIII(nsgaiii, m);
+            assertThat(allActualPoints.length).isEqualTo(expectedTotal);
+
+            double[][] actualOuter = Arrays.copyOfRange(allActualPoints, 0, expectedOuter);
+            double[][] actualInner = Arrays.copyOfRange(allActualPoints, expectedOuter, expectedTotal);
+
+            // 1. Camada externa isolada vs Das & Dennis canônico: deve ser 100% equivalente
+            double[][] canonicalOuter = ReferenceSetValidator.generateCanonicalSingleLayer(m, h1);
+            SetComparisonReport outerCmp = ReferenceSetValidator.compareSetsOrderIndependent(
+                    canonicalOuter, actualOuter, TOLERANCE);
+
+            // 2. Camada interna isolada vs Deb & Jain canônico: todos os N2 pontos divergem
+            // porque NSGAIII aplica (x_i + 1)/(m + 1) em vez de 0.5*x_i + 1/(2m)
+            double[][] canonicalInnerDebJain = ReferenceSetValidator.generateCanonicalInnerLayer(m, h2);
+            SetComparisonReport innerVsDebJain = ReferenceSetValidator.compareSetsOrderIndependent(
+                    canonicalInnerDebJain, actualInner, TOLERANCE);
+
+            // 3. Camada interna isolada vs fórmula analítica (x_i + 1)/(m + 1) do jMetal NSGAIII: 100% equivalente
+            double[][] expectedJMetalAll =
+                    ReferenceSetValidator.generateJMetalNsgaIIITwoLayersFormula(m, h1, h2);
+            double[][] expectedJMetalInner = Arrays.copyOfRange(expectedJMetalAll, expectedOuter, expectedTotal);
+            SetComparisonReport innerVsJMetalFormula = ReferenceSetValidator.compareSetsOrderIndependent(
+                    expectedJMetalInner, actualInner, TOLERANCE);
+
+            // Nos vértices da camada interna (x_k = 1, demais = 0):
+            // Deb & Jain: 0.5 * 1 + 1/(2m) = (m + 1) / (2m)
+            // NSGAIII (jMetal 7.8): (1 + 1) / (m + 1) = 2 / (m + 1)
+            double expectedAnalyticalMaxCoordErr =
+                    ((double) (m + 1) / (2.0 * m)) - (2.0 / (double) (m + 1));
+
+            System.out.printf(
+                    "[T07-NSGAIII-Layers] m=%d (H1=%d, H2=%d) | OUTER: count=%d/%d, unmatched=%d, maxCoordErr=%.3e, maxEuclidErr=%.3e, verdict=%s | INNER vs Deb&Jain: count=%d/%d, unmatched=%d, maxCoordErr=%.6f (teorico=%.6f), maxEuclidErr=%.6f, verdict=%s | INNER vs (x+1)/(m+1): maxCoordErr=%.3e, verdict=%s%n",
+                    m,
+                    h1,
+                    h2,
+                    outerCmp.countA(),
+                    outerCmp.countB(),
+                    outerCmp.unmatchedFromA(),
+                    outerCmp.maxCoordinateError(),
+                    outerCmp.maxEuclideanError(),
+                    outerCmp.verdict(),
+                    innerVsDebJain.countA(),
+                    innerVsDebJain.countB(),
+                    innerVsDebJain.unmatchedFromA(),
+                    innerVsDebJain.maxCoordinateError(),
+                    expectedAnalyticalMaxCoordErr,
+                    innerVsDebJain.maxEuclideanError(),
+                    innerVsDebJain.verdict(),
+                    innerVsJMetalFormula.maxCoordinateError(),
+                    innerVsJMetalFormula.verdict());
+
+            assertThat(outerCmp.verdict()).isEqualTo(Verdict.EQUIVALENT);
+            assertThat(outerCmp.unmatchedFromA()).isZero();
+            assertThat(outerCmp.maxCoordinateError()).isLessThan(1e-15);
+            assertThat(outerCmp.maxEuclideanError()).isLessThan(1e-15);
+
+            assertThat(innerVsDebJain.verdict()).isEqualTo(Verdict.NOT_EQUIVALENT);
+            assertThat(innerVsDebJain.unmatchedFromA()).isEqualTo(expectedInner);
+            assertThat(innerVsDebJain.maxCoordinateError())
+                    .isCloseTo(expectedAnalyticalMaxCoordErr, org.assertj.core.data.Offset.offset(1e-12));
+
+            assertThat(innerVsJMetalFormula.verdict()).isEqualTo(Verdict.EQUIVALENT);
+            assertThat(innerVsJMetalFormula.unmatchedFromA()).isZero();
+            assertThat(innerVsJMetalFormula.maxCoordinateError()).isLessThan(1e-15);
+        }
+    }
+
+    @Test
+    @DisplayName("T07.2: Persistência opcional (-DpersistReferencePoints) desativada por padrão, ativação controlada, proteção contra sobrescrita e imutabilidade dos vetores")
+    void testT07OptionalPersistenceAndNonOverwriteProtection(@TempDir Path tempDir) throws Exception {
+        String prevProp = System.getProperty(ReferenceSetValidator.PERSIST_REFERENCE_POINTS_PROPERTY);
+        try {
+            // 1. Por padrão (ou quando false), a propriedade está desativada
+            System.clearProperty(ReferenceSetValidator.PERSIST_REFERENCE_POINTS_PROPERTY);
+            assertThat(ReferenceSetValidator.isPersistReferencePointsEnabled()).isFalse();
+
+            Problem<DoubleSolution> problem = new WFG1(4, 20, 3);
+            int m = 3;
+            int h1 = StaticParams.getOuterDivisions(m);
+            int h2 = StaticParams.getInnerDivisions(m);
+            int popSize = StaticParams.getPopulationSize(m);
+
+            @SuppressWarnings("unchecked")
+            NSGAIII<DoubleSolution> nsgaiii = (NSGAIII<DoubleSolution>) WFGStudy.buildNSGAIII(
+                    problem,
+                    popSize,
+                    new SBXCrossover(1.0, 30.0),
+                    new PolynomialMutation(1.0 / problem.numberOfVariables(), 20.0));
+
+            double[][] beforePersistence = extractReferencePointsFromNsgaIII(nsgaiii, m);
+            double[][] snapshotCopy = new double[beforePersistence.length][m];
+            for (int i = 0; i < beforePersistence.length; i++) {
+                snapshotCopy[i] = beforePersistence[i].clone();
+            }
+
+            // Quando desativada, persistReferenceSetCsv retorna enabled=false e não grava arquivo
+            ReferencePersistenceReport disabledReport =
+                    ReferenceSetValidator.persistReferenceSetCsv(
+                            beforePersistence,
+                            m,
+                            h1,
+                            h2,
+                            "NSGAIII",
+                            tempDir,
+                            ReferenceSetValidator.isPersistReferencePointsEnabled(),
+                            false);
+            assertThat(disabledReport.enabled()).isFalse();
+            assertThat(disabledReport.written()).isFalse();
+            assertThat(Files.exists(tempDir.resolve("NSGAIII_m3_H112_H20.csv"))).isFalse();
+
+            // 2. Quando ativada (-DpersistReferencePoints=true), grava CSV com cabeçalho index,f1,f2,f3 e 15 casas decimais
+            System.setProperty(ReferenceSetValidator.PERSIST_REFERENCE_POINTS_PROPERTY, "true");
+            assertThat(ReferenceSetValidator.isPersistReferencePointsEnabled()).isTrue();
+
+            // Verifica também a integração real em WFGStudy.buildNSGAIII com recursos padrão e limpa o arquivo gerado se foi recém-criado
+            Path defaultTarget = ReferenceSetValidator.DEFAULT_NSGAIII_PERSIST_DIR.resolve("NSGAIII_m3_H112_H20.csv");
+            boolean existedBeforeDefault = Files.exists(defaultTarget);
+            try {
+                WFGStudy.buildNSGAIII(
+                        problem,
+                        popSize,
+                        new SBXCrossover(1.0, 30.0),
+                        new PolynomialMutation(1.0 / problem.numberOfVariables(), 20.0));
+                assertThat(Files.exists(defaultTarget)).isTrue();
+            } finally {
+                if (!existedBeforeDefault) {
+                    Files.deleteIfExists(defaultTarget);
+                }
+            }
+
+            ReferencePersistenceReport report =
+                    ReferenceSetValidator.persistReferenceSetCsv(
+                            beforePersistence,
+                            m,
+                            h1,
+                            h2,
+                            "NSGAIII",
+                            tempDir,
+                            ReferenceSetValidator.isPersistReferencePointsEnabled(),
+                            false);
+            assertThat(report).isNotNull();
+            assertThat(report.enabled()).isTrue();
+            assertThat(report.written()).isTrue();
+            assertThat(report.suffixedDueToConflict()).isFalse();
+            assertThat(report.outputFile().getFileName().toString()).isEqualTo("NSGAIII_m3_H112_H20.csv");
+            assertThat(Files.exists(report.outputFile())).isTrue();
+
+            List<String> lines = Files.readAllLines(report.outputFile(), StandardCharsets.UTF_8);
+            assertThat(lines.get(0)).isEqualTo("index,f1,f2,f3");
+            assertThat(lines).hasSize(popSize + 1);
+            assertThat(lines.get(1)).matches("^0,\\d+\\.\\d{15},\\d+\\.\\d{15},\\d+\\.\\d{15}$");
+
+            // 3. Verifica que os vetores internos do algoritmo NÃO foram alterados pela persistência
+            double[][] afterPersistence = extractReferencePointsFromNsgaIII(nsgaiii, m);
+            assertThat(afterPersistence).isDeepEqualTo(snapshotCopy);
+
+            // 4. Chamada repetida com conteúdo idêntico é idempotente (não cria duplicata nem altera o arquivo)
+            ReferencePersistenceReport idempotentReport =
+                    ReferenceSetValidator.persistReferenceSetCsv(
+                            beforePersistence, m, h1, h2, "NSGAIII", tempDir, true, false);
+            assertThat(idempotentReport.written()).isFalse();
+            assertThat(idempotentReport.reusedIdenticalExisting()).isTrue();
+            assertThat(idempotentReport.outputFile()).isEqualTo(report.outputFile());
+
+            // 5. Proteção contra sobrescrita quando já existe arquivo com conteúdo distinto:
+            //    - Modo failIfDifferentExists=true: lança IllegalStateException sem sobrescrever o arquivo original
+            //    - Modo failIfDifferentExists=false: cria arquivo com sufixo _run1.csv preservando o original intacto
+            Path existingPath = report.outputFile();
+            String customPreExistingContent = "index,f1,f2,f3\n0,1.000000000000000,0.000000000000000,0.000000000000000\n";
+            Files.writeString(existingPath, customPreExistingContent, StandardCharsets.UTF_8);
+
+            assertThatThrownBy(() -> ReferenceSetValidator.persistReferenceSetCsv(
+                            beforePersistence, m, h1, h2, "NSGAIII", tempDir, true, true))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Arquivo de referência já existe e não pode ser sobrescrito automaticamente");
+            assertThat(Files.readString(existingPath, StandardCharsets.UTF_8))
+                    .isEqualTo(customPreExistingContent);
+
+            ReferencePersistenceReport suffixedReport =
+                    ReferenceSetValidator.persistReferenceSetCsv(
+                            beforePersistence, m, h1, h2, "NSGAIII", tempDir, true, false);
+            assertThat(suffixedReport.written()).isTrue();
+            assertThat(suffixedReport.suffixedDueToConflict()).isTrue();
+            assertThat(suffixedReport.outputFile().getFileName().toString())
+                    .isEqualTo("NSGAIII_m3_H112_H20_run1.csv");
+            assertThat(Files.readString(existingPath, StandardCharsets.UTF_8))
+                    .isEqualTo(customPreExistingContent);
+        } finally {
+            if (prevProp == null) {
+                System.clearProperty(ReferenceSetValidator.PERSIST_REFERENCE_POINTS_PROPERTY);
+            } else {
+                System.setProperty(ReferenceSetValidator.PERSIST_REFERENCE_POINTS_PROPERTY, prevProp);
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")

@@ -54,6 +54,8 @@ import org.uma.jmetal.problem.multiobjective.wfg.WFG7;
 import org.uma.jmetal.problem.multiobjective.wfg.WFG8;
 import org.uma.jmetal.problem.multiobjective.wfg.WFG9;
 import br.usp.lti.newmoea.algorithm.fdea.FDEABuilder; // implementação
+import br.usp.lti.newmoea.util.ParetoFrontValidator;
+import br.usp.lti.newmoea.util.PerformanceProfiler;
 import br.usp.lti.newmoea.util.ReferenceSetValidator;
 import org.uma.jmetal.qualityindicator.impl.InvertedGenerationalDistance;
 import org.uma.jmetal.qualityindicator.impl.InvertedGenerationalDistancePlus;
@@ -189,6 +191,13 @@ public class WFGStudy {
         new GenerateWilcoxonTestTablesWithR<>(experiment).run();
         new GenerateFriedmanTestTables<>(experiment).run();
         new GenerateBoxplotsWithR<>(experiment).setRows(3).setColumns(3).setDisplayNotch().run();
+
+        if (PerformanceProfiler.isProfilePerformanceEnabled()) {
+            int warmup = Integer.getInteger("perf.warmup", 1);
+            int perfRuns = Integer.getInteger("perf.runs", INDEPENDENT_RUNS);
+            PerformanceProfiler.runStandardBenchmarkSuite(
+                    PerformanceProfiler.DEFAULT_RESULTS_CSV_PATH, warmup, perfRuns);
+        }
     }
 
     // static void addToProblemList(List problemList, int m, int k) {
@@ -240,6 +249,53 @@ public class WFGStudy {
             addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ5(L, m), "DTLZ5_" + m).setReferenceFront("DTLZ5." + m + "D.csv"));
             addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ6(L, m), "DTLZ6_" + m).setReferenceFront("DTLZ6." + m + "D.csv"));
             addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ7(L, m), "DTLZ7_" + m).setReferenceFront("DTLZ7." + m + "D.csv"));
+        } else if (ParetoFrontValidator.isGenerateAllReferenceFrontsEnabled()) {
+            addAnalyticalDtlzProblemsForManyObjectives(problemList, m);
+        }
+    }
+
+    /**
+     * Quando {@code -DgenerateAllReferenceFronts=true}, gera e valida matematicamente as frentes
+     * analíticas de {@code DTLZ1–DTLZ7} para \(m > 3\) em
+     * {@code resources/referenceFronts/pf_gen/analytical/} antes de habilitar cada combinação no estudo.
+     */
+    private static void addAnalyticalDtlzProblemsForManyObjectives(
+            List<ExperimentProblem<DoubleSolution>> problemList, int m) {
+        int h1 = StaticParams.getOuterDivisions(m);
+        int h2 = StaticParams.getInnerDivisions(m);
+        Problem<DoubleSolution>[] dtlzProblems = new Problem[]{
+            new DTLZ1(L, m),
+            new DTLZ2(L, m),
+            new DTLZ3(L, m),
+            new DTLZ4(L, m),
+            new DTLZ5(L, m),
+            new DTLZ6(L, m),
+            new DTLZ7(L, m)
+        };
+        for (int idx = 0; idx < dtlzProblems.length; idx++) {
+            int p = idx + 1;
+            String problemName = "DTLZ" + p;
+            String tag = problemName + "_" + m;
+            if (!shouldIncludeProblem(tag)) {
+                continue;
+            }
+            Path generatedFront = ParetoFrontValidator.generateAndSaveAnalyticalDtlzFront(
+                    problemName,
+                    m,
+                    h1,
+                    h2,
+                    ParetoFrontValidator.DEFAULT_ANALYTICAL_PF_GEN_DIR,
+                    true).outputFile();
+            String relativeFromParetoFrontsDir = Paths.get("pareto_fronts", "csv")
+                    .toAbsolutePath()
+                    .normalize()
+                    .relativize(generatedFront.toAbsolutePath().normalize())
+                    .toString()
+                    .replace('\\', '/');
+            addIfAllowed(
+                    problemList,
+                    new ExperimentProblem<>(dtlzProblems[idx], tag)
+                            .setReferenceFront(relativeFromParetoFrontsDir));
         }
     }
 
@@ -316,7 +372,13 @@ public class WFGStudy {
             builder.setSecondLayerDivisions(innerDivisions);
         }
 
-        return builder.build();
+        Algorithm<List<DoubleSolution>> algorithm = builder.build();
+        if (ReferenceSetValidator.isPersistReferencePointsEnabled()) {
+            double[][] actualPoints = ReferenceSetValidator.extractReferencePointsFromNsgaIII(algorithm, m);
+            ReferenceSetValidator.persistNsgaIIIReferencePointsIfEnabled(
+                    actualPoints, m, outerDivisions, innerDivisions);
+        }
+        return algorithm;
     }
 
     static Algorithm buildNSGAII(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
@@ -387,8 +449,10 @@ public class WFGStudy {
         return age.build();
     }
 
-    static Algorithm buildRVEA(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
+    public static Algorithm buildRVEA(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
         int m = problem.numberOfObjectives();
+        int outerDivisions = StaticParams.getOuterDivisions(m);
+        int innerDivisions = StaticParams.getInnerDivisions(m);
         int maxEvaluations = StaticParams.getMaxGenerations(m, problem.name()) * populationSize;
         List<double[]> referenceVectors;
         switch (m) {
@@ -399,6 +463,16 @@ public class WFGStudy {
             case 10 -> referenceVectors = ReferencePointGenerator.generateTwoLayers(10, 3, 2);
             case 15 -> referenceVectors = ReferencePointGenerator.generateTwoLayers(15, 2, 1);
             default -> referenceVectors = ReferencePointGenerator.generateSingleLayer(m, 12);
+        }
+        if (populationSize != referenceVectors.size()) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "Inconsistência na configuração do RVEA para m=%d: populationSize=%d difere de referenceVectors.size()=%d.",
+                            m, populationSize, referenceVectors.size()));
+        }
+        if (ReferenceSetValidator.isPersistReferenceDirectionsEnabled()) {
+            ReferenceSetValidator.persistRveaReferenceDirectionsIfEnabled(
+                    referenceVectors, m, outerDivisions, innerDivisions);
         }
         double alpha = 2.0;
         double fr = 0.1;

@@ -3,8 +3,11 @@ package br.usp.lti.newmoea.qualityindicator;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import br.usp.lti.newmoea.study.StaticParams;
+import br.usp.lti.newmoea.study.WFGStudy;
 import br.usp.lti.newmoea.util.ParetoFrontValidator;
 import br.usp.lti.newmoea.util.ParetoFrontValidator.FrontValidationSummary;
+import br.usp.lti.newmoea.util.ParetoFrontValidator.GeneratedFrontReport;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -415,5 +418,241 @@ class ParetoFrontValidationTest {
                         () -> ParetoFrontValidator.validateWfgConcaveEllipsoid(badWfgEllipsoid, 1e-4))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Hiper-elipsoide WFG violado");
+    }
+
+    // =========================================================================
+    // TESTE 7 (T07): Validação analítica e geração opcional de DTLZ1–DTLZ7 (m in {2,3,5,8,10,15})
+    // =========================================================================
+
+    static Stream<Arguments> all42DtlzConfigurationsProvider() {
+        List<Arguments> args = new ArrayList<>();
+        for (int p = 1; p <= 7; p++) {
+            for (int m : WFG_OBJECTIVES) {
+                args.add(Arguments.of("DTLZ" + p, m));
+            }
+        }
+        return args.stream();
+    }
+
+    @ParameterizedTest(name = "[{index}] {0} (m={1})")
+    @MethodSource("all42DtlzConfigurationsProvider")
+    @DisplayName("T07.7a: Geração e validação analítica de DTLZ1–DTLZ7 para m in {2, 3, 5, 8, 10, 15} (não-dominância, finitude, equações exatas)")
+    void testT07AnalyticalDtlzGenerationAll42Combinations(String problemName, int m, @TempDir Path tempDir) {
+        int h1 = StaticParams.getOuterDivisions(m);
+        int h2 = StaticParams.getInnerDivisions(m);
+
+        GeneratedFrontReport generatedReport = ParetoFrontValidator.generateAndSaveAnalyticalDtlzFront(
+                problemName, m, h1, h2, tempDir, true);
+        Path savedCsv = generatedReport.outputFile();
+        assertThat(Files.exists(savedCsv)).isTrue();
+        assertThat(savedCsv.getFileName().toString())
+                .isEqualTo(String.format("%s.%dD.csv", problemName, m));
+
+        FrontValidationSummary summary = ParetoFrontValidator.validateParetoFrontFile(savedCsv, m);
+        assertThat(summary.dimension()).isEqualTo(m);
+        assertThat(summary.totalPoints()).isGreaterThan(0);
+        assertThat(summary.duplicatePoints()).isZero();
+        assertThat(summary.hasNegativeValues()).isFalse();
+        assertThat(ParetoFrontValidator.countDominatedPoints(summary.points(), 1e-9)).isZero();
+
+        ParetoFrontValidator.validateAnalyticalDtlzFrontByProblem(
+                problemName, summary.points(), 1e-6);
+    }
+
+    @Test
+    @DisplayName("T07.7b: Análise matemática específica da curva degenerada 1D de DTLZ5 e DTLZ6 no jMetal 7.8 para m >= 3")
+    void testT07Dtlz5And6JMetalDegenerate1DCurveMathematics() {
+        for (int m : new int[]{2, 3, 5, 8, 10, 15}) {
+            double[][] curve = ParetoFrontValidator.generateAnalyticalDtlz5And6Curve(m, 200);
+            assertThat(curve).hasDimensions(200, m);
+            assertThat(ParetoFrontValidator.countDominatedPoints(curve, 1e-9)).isZero();
+
+            double maxErr = ParetoFrontValidator.validateDtlz5And6JMetalCurveAnalytical(curve, 1e-12);
+            assertThat(maxErr).isLessThanOrEqualTo(1e-14);
+
+            if (m >= 3) {
+                // Verifica explicitamente as relações da curva 1D quando theta_1 = ... = theta_{m-2} = pi/4:
+                // f_1 == f_2 e f_j = f_1 * (sqrt(2))^(j-2) para j = 3 .. m-1
+                for (double[] pt : curve) {
+                    assertThat(pt[0]).isCloseTo(pt[1], org.assertj.core.data.Offset.offset(1e-15));
+                    double scale = 1.0;
+                    for (int j = 2; j < m - 1; j++) {
+                        scale *= Math.sqrt(2.0);
+                        assertThat(pt[j])
+                                .isCloseTo(pt[0] * scale, org.assertj.core.data.Offset.offset(1e-14));
+                    }
+                }
+            }
+        }
+
+        // Rejeita ponto na esfera unitária que viola a progressão geométrica f_3 = sqrt(2)*f_1 em m=5
+        double[][] invalidCurve5D = {{0.5, 0.5, 0.5, 0.5, 0.0}};
+        assertThatThrownBy(() -> ParetoFrontValidator.validateDtlz5And6JMetalCurveAnalytical(invalidCurve5D, 1e-4))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("DTLZ5/6 violado");
+    }
+
+    @Test
+    @DisplayName("T07.7c: Análise matemática específica de DTLZ7 (intervalos desconexos I0 U I1, limites exatos de f_m e não-dominância)")
+    void testT07Dtlz7MathematicalDomainAndDisconnectedComponents() {
+        for (int m : new int[]{2, 3, 5, 8, 10, 15}) {
+            double[][] front = ParetoFrontValidator.generateAnalyticalDtlz7Front(m, 250);
+            assertThat(ParetoFrontValidator.countDominatedPoints(front, 1e-9)).isZero();
+
+            double maxEqErr = ParetoFrontValidator.validateDtlz7StrictParetoFront(front, 1e-12);
+            assertThat(maxEqErr).isLessThanOrEqualTo(1e-13);
+
+            double expectedFmMin = ParetoFrontValidator.dtlz7AnalyticalMinLastObjective(m);
+            double expectedFmMax = ParetoFrontValidator.dtlz7AnalyticalMaxLastObjective(m);
+
+            for (double[] pt : front) {
+                for (int j = 0; j < m - 1; j++) {
+                    assertThat(ParetoFrontValidator.isDtlz7CoordinateInParetoIntervals(pt[j], 1e-12))
+                            .as("Coordenada f_%d=%.6f em DTLZ7 (%dD) deve pertencer a I0 U I1", j + 1, pt[j], m)
+                            .isTrue();
+                }
+                double fm = pt[m - 1];
+                assertThat(fm).isBetween(expectedFmMin - 1e-9, expectedFmMax + 1e-9);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("T07.7d: Consolidação empírica (-DgenerateEmpiricalReferenceFronts) com metadados e proibição de sobreposição com execuções avaliadas")
+    void testT07EmpiricalReferenceFrontGenerationAndGuards(@TempDir Path tempDir) throws IOException {
+        String prevProp = System.getProperty(ParetoFrontValidator.GENERATE_EMPIRICAL_REFERENCE_FRONTS_PROPERTY);
+        try {
+            // 1. Por padrão, desativada
+            System.clearProperty(ParetoFrontValidator.GENERATE_EMPIRICAL_REFERENCE_FRONTS_PROPERTY);
+            assertThat(ParetoFrontValidator.isGenerateEmpiricalReferenceFrontsEnabled()).isFalse();
+
+            Path run0 = tempDir.resolve("FUN0.csv");
+            Path run1 = tempDir.resolve("FUN1.csv");
+            Path evalRun = tempDir.resolve("FUN2.csv");
+
+            // run0 contém 2 pontos não-dominados e 1 ponto dominado (0.6, 0.6)
+            Files.writeString(run0, "0.1,0.9\n0.5,0.5\n0.6,0.6\n", StandardCharsets.UTF_8);
+            // run1 contém 1 duplicata (0.5, 0.5), 1 ponto novo não-dominado (0.9, 0.1) e 1 dominado (0.8, 0.8)
+            Files.writeString(run1, "0.5,0.5\n0.9,0.1\n0.8,0.8\n", StandardCharsets.UTF_8);
+            Files.writeString(evalRun, "0.2,0.8\n", StandardCharsets.UTF_8);
+
+            Path outDir = tempDir.resolve("empirical_out");
+
+            // 2. Consolidação válida (run0 + run1 disjuntos de evalRun)
+            GeneratedFrontReport report = ParetoFrontValidator.generateEmpiricalReferenceFront(
+                    "DTLZ2",
+                    2,
+                    List.of(run0, run1),
+                    List.of(evalRun),
+                    "runs=0..1;seed=default",
+                    outDir,
+                    true);
+
+            assertThat(report.enabled()).isTrue();
+            assertThat(report.written()).isTrue();
+            assertThat(report.outputFile().getFileName().toString())
+                    .isEqualTo("DTLZ2.2D.empirical.csv");
+            assertThat(Files.exists(report.outputFile())).isTrue();
+            assertThat(Files.exists(report.metadataFile())).isTrue();
+
+            String metaContent = Files.readString(report.metadataFile(), StandardCharsets.UTF_8);
+            assertThat(metaContent)
+                    .contains("type=empirical")
+                    .contains("totalCandidates=6")
+                    .contains("nonDominatedPoints=3");
+
+            FrontValidationSummary consolidatedSummary = report.summary();
+            assertThat(consolidatedSummary.totalPoints()).isEqualTo(3);
+            assertThat(consolidatedSummary.duplicatePoints()).isZero();
+            assertThat(ParetoFrontValidator.countDominatedPoints(consolidatedSummary.points(), 1e-9)).isZero();
+
+            // 3. Rejeita tentativa de usar a mesma execução (run1) tanto para construir quanto para avaliar a frente
+            assertThatThrownBy(() -> ParetoFrontValidator.generateEmpiricalReferenceFront(
+                            "DTLZ2",
+                            2,
+                            List.of(run0, run1),
+                            List.of(run1),
+                            "overlap-test",
+                            outDir.resolve("sub"),
+                            true))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Violação metodológica: proibido usar o mesmo arquivo de execução");
+
+            // 4. Proíbe gravar qualquer frente gerada dentro de pareto_fronts/csv/
+            assertThatThrownBy(() -> ParetoFrontValidator.generateAndSaveAnalyticalDtlzFront(
+                            "DTLZ2", 5, 6, 0, PARETO_FRONTS_DIR, true))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Proibido gravar ou sobrescrever arquivos no diretório protegido pareto_fronts/csv");
+        } finally {
+            if (prevProp == null) {
+                System.clearProperty(ParetoFrontValidator.GENERATE_EMPIRICAL_REFERENCE_FRONTS_PROPERTY);
+            } else {
+                System.setProperty(ParetoFrontValidator.GENERATE_EMPIRICAL_REFERENCE_FRONTS_PROPERTY, prevProp);
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("T07.7e: Modo padrão (-DgenerateAllReferenceFronts=false) vs ativado (-DgenerateAllReferenceFronts=true) para DTLZ m > 3")
+    void testT07GenerateAllReferenceFrontsPropertyToggle() throws Exception {
+        String prevGenProp = System.getProperty(ParetoFrontValidator.GENERATE_ALL_REFERENCE_FRONTS_PROPERTY);
+        String prevProbFilter = System.getProperty("problem");
+        try {
+            System.clearProperty("problem");
+            System.clearProperty(ParetoFrontValidator.GENERATE_ALL_REFERENCE_FRONTS_PROPERTY);
+            assertThat(ParetoFrontValidator.isGenerateAllReferenceFrontsEnabled()).isFalse();
+
+            java.lang.reflect.Method addMethod = WFGStudy.class.getDeclaredMethod(
+                    "addToProblemList", List.class, int.class, int.class);
+            addMethod.setAccessible(true);
+
+            // 1. Quando -DgenerateAllReferenceFronts=false (padrão), m=5 adiciona apenas os 9 problemas WFG (nenhum DTLZ)
+            List<org.uma.jmetal.lab.experiment.util.ExperimentProblem<org.uma.jmetal.solution.doublesolution.DoubleSolution>> defaultList5D =
+                    new ArrayList<>();
+            addMethod.invoke(null, defaultList5D, 5, 8);
+            assertThat(defaultList5D).hasSize(9);
+            assertThat(defaultList5D)
+                    .extracting(org.uma.jmetal.lab.experiment.util.ExperimentProblem::getTag)
+                    .allMatch(tag -> tag.startsWith("WFG"));
+
+            // 2. Quando -DgenerateAllReferenceFronts=true, m=5 gera e valida as 7 frentes DTLZ em resources/referenceFronts/pf_gen/analytical/
+            //    e adiciona 9 WFG + 7 DTLZ = 16 problemas
+            System.setProperty(ParetoFrontValidator.GENERATE_ALL_REFERENCE_FRONTS_PROPERTY, "true");
+            assertThat(ParetoFrontValidator.isGenerateAllReferenceFrontsEnabled()).isTrue();
+
+            List<Path> createdAnalyticalFiles = new ArrayList<>();
+            for (int p = 1; p <= 7; p++) {
+                Path f = ParetoFrontValidator.DEFAULT_ANALYTICAL_PF_GEN_DIR.resolve(
+                        String.format("DTLZ%d.5D.csv", p));
+                if (!Files.exists(f)) {
+                    createdAnalyticalFiles.add(f);
+                }
+            }
+
+            try {
+                List<org.uma.jmetal.lab.experiment.util.ExperimentProblem<org.uma.jmetal.solution.doublesolution.DoubleSolution>> enabledList5D =
+                        new ArrayList<>();
+                addMethod.invoke(null, enabledList5D, 5, 8);
+                assertThat(enabledList5D).hasSize(16);
+                assertThat(enabledList5D)
+                        .extracting(org.uma.jmetal.lab.experiment.util.ExperimentProblem::getTag)
+                        .contains("DTLZ1_5", "DTLZ2_5", "DTLZ3_5", "DTLZ4_5", "DTLZ5_5", "DTLZ6_5", "DTLZ7_5");
+            } finally {
+                for (Path created : createdAnalyticalFiles) {
+                    Files.deleteIfExists(created);
+                }
+            }
+        } finally {
+            if (prevGenProp == null) {
+                System.clearProperty(ParetoFrontValidator.GENERATE_ALL_REFERENCE_FRONTS_PROPERTY);
+            } else {
+                System.setProperty(ParetoFrontValidator.GENERATE_ALL_REFERENCE_FRONTS_PROPERTY, prevGenProp);
+            }
+            if (prevProbFilter == null) {
+                System.clearProperty("problem");
+            } else {
+                System.setProperty("problem", prevProbFilter);
+            }
+        }
     }
 }

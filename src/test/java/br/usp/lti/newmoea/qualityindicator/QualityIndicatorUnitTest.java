@@ -146,24 +146,41 @@ public class QualityIndicatorUnitTest {
 
     @ParameterizedTest(name = "m={0}")
     @ValueSource(ints = {2, 3, 5, 8, 10, 15})
-    @DisplayName("T05: Ponto de referência comum de hipervolume para WFG (2,...,2) e DTLZ (1,...,1) em todas as dimensões")
+    @DisplayName("T05/T08: Ponto de referência comum de hipervolume por problema (WFG1..9 e DTLZ1..7) em todas as dimensões")
     void testCommonHypervolumeReferencePointsAndIndicators(int m) {
         double[] wfgRef = StaticParams.getHypervolumeReferencePoint("WFG1", m);
-        double[] dtlzRef = StaticParams.getHypervolumeReferencePoint("DTLZ2", m);
+        double[] dtlz1Ref = StaticParams.getHypervolumeReferencePoint("DTLZ1", m);
+        double[] dtlz2Ref = StaticParams.getHypervolumeReferencePoint("DTLZ2", m);
+        double[] dtlz7Ref = StaticParams.getHypervolumeReferencePoint("DTLZ7", m);
 
         assertThat(wfgRef).hasSize(m);
-        assertThat(dtlzRef).hasSize(m);
+        assertThat(dtlz1Ref).hasSize(m);
+        assertThat(dtlz2Ref).hasSize(m);
+        assertThat(dtlz7Ref).hasSize(m);
+
         for (int i = 0; i < m; i++) {
-            assertThat(wfgRef[i]).isEqualTo(2.0);
-            assertThat(dtlzRef[i]).isEqualTo(1.0);
+            assertThat(wfgRef[i]).isCloseTo(2.2 * (i + 1), org.assertj.core.data.Offset.offset(1e-12));
+            assertThat(dtlz1Ref[i]).isCloseTo(0.6, org.assertj.core.data.Offset.offset(1e-12));
+            assertThat(dtlz2Ref[i]).isCloseTo(1.1, org.assertj.core.data.Offset.offset(1e-12));
+            if (i < m - 1) {
+                assertThat(dtlz7Ref[i]).isCloseTo(1.1, org.assertj.core.data.Offset.offset(1e-12));
+            } else {
+                assertThat(dtlz7Ref[i]).isCloseTo(2.1 * m, org.assertj.core.data.Offset.offset(1e-12));
+            }
         }
 
-        // Todas as variantes de WFG1..WFG9 e DTLZ1..DTLZ7 compartilham o mesmo ponto para o mesmo m
+        // WFG1..WFG9 compartilham z_j = 2.2 * j (com ajuste z_1 = 3.1 em WFG3 para m = 2 devido a WFG3.2D.csv)
         for (int p = 1; p <= 9; p++) {
-            assertThat(StaticParams.getHypervolumeReferencePoint("WFG" + p, m)).containsExactly(wfgRef);
+            if (p == 3 && m == 2) {
+                assertThat(StaticParams.getHypervolumeReferencePoint("WFG3", 2))
+                        .containsExactly(3.1, 4.4);
+            } else {
+                assertThat(StaticParams.getHypervolumeReferencePoint("WFG" + p, m)).containsExactly(wfgRef);
+            }
         }
-        for (int p = 1; p <= 7; p++) {
-            assertThat(StaticParams.getHypervolumeReferencePoint("DTLZ" + p, m)).containsExactly(dtlzRef);
+        // DTLZ2..DTLZ6 compartilham (1.1, ..., 1.1)
+        for (int p = 2; p <= 6; p++) {
+            assertThat(StaticParams.getHypervolumeReferencePoint("DTLZ" + p, m)).containsExactly(dtlz2Ref);
         }
 
         PISAHypervolume primaryWfgHv = StaticParams.createPrimaryHypervolume("WFG1", m);

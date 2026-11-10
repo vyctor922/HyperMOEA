@@ -1,13 +1,14 @@
-# Regras do projeto NewMOEA
-
+# Regras do projeto hypeMOEA
 - A raiz do workspace contém `pom.xml`, `README.md`, `src/` e `tasks/`.
-- Antes de qualquer trabalho, consulte `ORCHESTRATOR.md`, `HANDLER.md` e as tarefas pertinentes em `tasks/`.
+- Antes de qualquer trabalho, consulte `TASK_COORDINATOR.md`, `HANDLER.md` e as tarefas pertinentes em `tasks/`.
 - O projeto utiliza Java 21, Maven e jMetal 7.8. Confirme essas versões nos arquivos reais antes de alterar o código.
 - Preserve a arquitetura e as funcionalidades existentes, salvo quando uma tarefa justificar explicitamente a alteração.
 - Não invente resultados experimentais, referências científicas, APIs ou resultados de testes.
 - Não substitua arquivos em `MOEAD_Weights/` ou `pareto_fronts/csv/` sem evidência, justificativa documentada e validação.
 - Não confunda vetores de pesos do MOEA/DD, pontos de referência do NSGA-III e frentes de Pareto.
 - Atualize `HANDLER.md` ao iniciar, bloquear, retomar ou concluir uma tarefa.
+- Ao final de todas as tarefas atualize as informações do README e adicione em 'Histórico de Alterações' (sem alterar o que já tem nessa parte do README) as alterações de cada dia que ainda não foi inserida ainda, sempre com título no formato '## Alterações 00/00/000 - 00:00'.
+- Sempre verifique se já não existe uma funcionalidade ou implementação no projeto que atenda o que você precisa fazer.
 - Não permita alterações concorrentes conflitantes nos mesmos arquivos.
 - Execute os testes pertinentes e registre os resultados reais.
 - Nunca declare uma tarefa concluída sem verificar seus critérios de aceitação.
