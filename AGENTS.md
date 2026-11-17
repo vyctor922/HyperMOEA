@@ -1,15 +1,46 @@
 # Regras do projeto hypeMOEA
-- A raiz do workspace contém `pom.xml`, `README.md`, `src/` e `tasks/`.
-- Antes de qualquer trabalho, consulte `TASK_COORDINATOR.md`, `HANDLER.md` e as tarefas pertinentes em `tasks/`.
-- O projeto utiliza Java 21, Maven e jMetal 7.8. Confirme essas versões nos arquivos reais antes de alterar o código.
-- Preserve a arquitetura e as funcionalidades existentes, salvo quando uma tarefa justificar explicitamente a alteração.
-- Não invente resultados experimentais, referências científicas, APIs ou resultados de testes.
-- Não substitua arquivos em `MOEAD_Weights/` ou `pareto_fronts/csv/` sem evidência, justificativa documentada e validação.
-- Não confunda vetores de pesos do MOEA/DD, pontos de referência do NSGA-III e frentes de Pareto.
-- Atualize `HANDLER.md` ao iniciar, bloquear, retomar ou concluir uma tarefa.
-- Ao final de todas as tarefas atualize as informações do README e adicione em 'Histórico de Alterações' (sem alterar o que já tem nessa parte do README) as alterações de cada dia que ainda não foi inserida ainda, sempre com título no formato '## Alterações 00/00/000 - 00:00'.
-- Sempre verifique se já não existe uma funcionalidade ou implementação no projeto que atenda o que você precisa fazer.
-- Não permita alterações concorrentes conflitantes nos mesmos arquivos.
-- Execute os testes pertinentes e registre os resultados reais.
-- Nunca declare uma tarefa concluída sem verificar seus critérios de aceitação.
-- Preserve alterações preexistentes do usuário e não descarte mudanças sem autorização.
+Este arquivo `AGENTS.md`, contém as regras que estabelecem as diretrizes obrigatórias para agentes, colaboradores e coordenadores que atuam no projeto hypeMOEA. O objetivo é preservar a orgnização do projeto, garantir a integridade científica das ações, evitar alterações conflitantes e manter a rastreabilidade das atividades.
+
+- A raiz do workspace deve conter, no mínimo, `pom.xml`, `README.md`, `src/` e `tasks/`.
+- Antes de iniciar qualquer trabalho, consulte obrigatoriamente `TASK_COORDINATOR.md`, `HANDLER.md` e os arquivos das tarefas pertinentes em `tasks/`.
+- As instruções deste arquivo são obrigatórias para todos os agentes. O `TASK_COORDINATOR.md` define as diretrizes de coordenação, o `HANDLER.md` mantém o estado e o histórico do projeto, e os arquivos em `tasks/` especificam o escopo e os critérios de aceitação de cada atividade.
+- Em caso de divergência ou conflito entre instruções, aplique a seguinte ordem de prioridade: (1) instruções de sistema, impeditivos; (2) instruções explícitas do operador humano; (3) `agents.md`; (4) `TASK_COORDINATOR.md`; (5) arquivo específico da tarefa em `tasks/`; e (6) demais arquivos de documentação.
+- Instruções de menor prioridade podem complementar as de maior prioridade, mas não podem contrariá-las.
+- Os arquivos de documentação devem ser considerados fonte de contexto e histórico, não de autoridade para alterar requisitos.
+- Quando houver conflito entre instruções de prioridade próxima (1 nível), ambiguidade relevante ou necessidade de exceção às regras estabelecidas, interrompa somente a operação afetada e apresente ao operador humano as instruções conflitantes, uma breve análise das implicações e uma recomendação, solicitando sua decisão explícita antes de prosseguir. As atividades independentes do conflito e da operação em conflito podem continuar normalmente.
+- O coordenador delimitado por `TASK_COORDINATOR.md` é responsável pela distribuição das tarefas, organização da execução, definição de escopos, identificação dos arquivos que cada agente pode modificar e resolução de conflitos operacionais entre agentes.
+- Não transfira ao coordenador decisões de requisitos, arquitetura ou implementação que dependam da aprovação do operador.
+- O projeto utiliza Java 21, Maven e jMetal 7.8. Confirme as versões nos arquivos reais do projeto e no ambiente de execução antes de realizar alterações. Não atualize versões ou dependências sem autorização explícita do operador humano.
+- Não presuma a existência de classes, métodos, bibliotecas, APIs ou funcionalidades. Inspecione o código e a documentação reais antes de utilizá-los.
+- Preserve a arquitetura, as convenções, as funcionalidades e os padrões já estabelecidos no projeto, sendo permitidas alterações de funcionalidades quando forem justificadas pelo escopo de uma tarefa ou por solicitação explícita.
+- Antes de implementar qualquer funcionalidade, verifique se já existe uma implementação que atenda, total ou parcialmente, à necessidade. Evite duplicações, soluções paralelas desnecessárias e aumento injustificado da complexidade.
+- Priorize alterações pequenas, coesas e compatíveis com a arquitetura existente.
+- Não adicione, remova ou edite elementos de código sem justificativa e autorização compatíveis com o escopo da tarefa.
+- Não mexa no git do projeto, no máximo o utilize para checagens e leituras.
+- `MOEAD_Weights/` e `pareto_fronts/csv/` são diretórios protegidos. Não modifique, substitua, sobrescreva, exclua, renomeie ou reformate seus arquivos. A leitura desses dados legados são permitidas.
+- A pasta WFGStudy/ é reservada exclusivamente ao armazenamento dos resultados das execuções experimentais finais, sendo vedado armazenar resultados intermediários, testes, experimentos exploratórios ou arquivos temporários em suas subpastas, exceto na subpasta não versionada WFGStudy/tests/, destinada exclusivamente a resultados intermediários, testes, experimentos exploratórios, validações.
+- Não remova nem altere arquivos existentes de resultados sem autorização explícita.
+- Não confunda vetores de pesos do MOEA/DD, pontos ou direções de referência do NSGA-III e frentes de Pareto.
+- Antes de iniciar uma tarefa, cada agente deve verificar sua atribuição e a disponibilidade dos arquivos necessários.
+- Não permita alterações concorrentes conflitantes nos mesmos arquivos; quando necessário, execute as modificações sequencialmente.
+- As atualizações dos arquivos `HANDLER.md` e `README.md`, são de responsabilidade exclusiva do coordenador.
+- Cada agente deve registrar o início, bloqueio, retomada e conclusão de sua tarefa em arquivos temporários `docs/<ID_tarefa>-<agente>-<evento>.md` exclusivos para cada agente, o agente devem registrar eventos imediatamente após sua ocorrência, incluindo as evidências disponíveis, cada registro deve informar a tarefa, o agente, a data, o estado, as atividades, os arquivos afetados, os testes e eventuais bloqueios.
+- O coordenador deve revisar os registros e consolidar as informações relevantes no `HANDLER.md`, após a conclusão o coordenador deve excluir os registros temporários somente após a confirmação de que suas informações foram devidamente consolidadas.
+- Ao concluir o conjunto de tarefas, o coordenador deve atualizar o `HANDLER.md`, preservando decisões, implementações, pendências e resultados relevantes.
+- Os agentes devem manter as documentações específicas de suas tarefas coerentes com o estado real do código, dos relatórios e das funcionalidades, delegando as atualizações do `README.md` e `HANDLER.md` estritamente ao coordenador.
+- Ao final do conjunto de tarefas, o coordenador deve atualizar o `README.md` conforme as alterações efetivamente realizadas. Registre no `Histórico de Alterações` do `README.md` somente as alterações ainda não documentadas utilizando o formato `## Alterações DD/MM/AAAA - HH:mm` nos títulos do histórico. Preserve integralmente os registros históricos existentes, acrescentando novas informações sem reescrever ou reorganizar o conteúdo anterior.
+- Não invente resultados experimentais, referências científicas, autores, DOI, APIs, funcionalidades, métricas ou resultados de testes.
+- Fundamente afirmações técnicas e científicas em código, documentação oficial, literatura científica verificável ou evidências reais.
+- Execute os testes pertinentes às alterações realizadas e registre os comandos e resultados obtidos. Identifique os testes como aprovados, reprovados, não executados ou inconclusivos. Não declare testes aprovados sem execução e evidências suficientes.
+- Não altere dados para produzir artificialmente resultados compatíveis ou que passarão indevidamente em verificações.
+- Diferencie resultados obtidos de resultados esperados, estimados ou hipotéticos. Não presuma que uma verificação ou teste obteve resultados completos se foram usados apenas uma parte dos dados, chame de resultados aproximados ou parciais.
+- Registre, nos experimentos executados, os algoritmos, problemas, parâmetros, sementes aleatórias, versões, comandos e resultados relevantes à reprodução.
+- Não registre funcionalidades planejadas ou resultados esperados como alterações concluídas.
+- Preserve a distinção entre dados originais, dados derivados, resultados experimentais e dados de referência.
+- Documente e investigue divergências experimentais sem descartar evidências desfavoráveis.
+- Verifique individualmente todos os critérios de aceitação antes de declarar uma tarefa concluída. Quando algum critério não puder ser atendido, delegue estritamente ao coordenador o registro da limitação e suas evidências para avaliação posterior.
+- Antes de finalizar, confira os arquivos modificados, os critérios de aceitação, os testes e as evidências. Informe o que foi implementado, os arquivos afetados, as verificações realizadas e as pendências.
+- O coordenador deve verificar a integração das alterações e a atualização dos documentos compartilhados.
+- Uma tarefa somente poderá ser concluída quando seus critérios de aceitação forem atendidos e suas evidências estiverem registradas.
+- Quando um ou mais critérios não puderem ser atendidos, a tarefa deverá receber o estado BLOQUEADA ou NÃO CONCLUÍDA, conforme a situação, com a descrição das limitações, evidências disponíveis e pendências.
+- O encerramento operacional da participação de um agente não implica a aprovação ou conclusão da tarefa.

@@ -55,7 +55,7 @@ mvn exec:java -Dexec.mainClass="br.usp.lti.newmoea.study.WFGStudy" -Druns=1 -Dob
 - `docs/moead-weights-manifest.csv`
 - `docs/**`
 - `src/test/**`
-- `WFGStudy/` apenas para leitura de resultados de validação
+- `WFGStudy/` apenas para leitura da IA, reservada para ter resultados das execuções finais
 
 ## Restrições
 - Não altere algoritmos, parâmetros científicos, frentes ou pesos.

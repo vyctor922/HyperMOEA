@@ -55,7 +55,11 @@ class MoeaddWeightValidationTest {
 
     private static final Path WEIGHTS_DIR = Paths.get("MOEAD_Weights");
     private static final Path COPIED_ROOT_DIR = Paths.get("resources", "weightVectorFiles");
-    private static final Path COPIED_MOEAD_DIR = Paths.get("resources", "weightVectorFiles", "moead");
+    /**
+     * Caminho canônico em {@code resources/weightVectorFiles} (reconciliado na T18 após remoção
+     * da subpasta duplicada {@code resources/weightVectorFiles/moead}).
+     */
+    private static final Path COPIED_MOEAD_DIR = Paths.get("resources", "weightVectorFiles");
     private static final Path GENERATED_WEIGHTS_DIR = Paths.get("resources", "weightVectorFiles", "weights_gen");
 
     /**

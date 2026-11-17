@@ -1,0 +1,22 @@
+item,categoria,parametro,valor_regra,trecho_codigo,fonte_primaria,status,justificativa
+1,Ambiente,Java,21,pom.xml:<maven.compiler.source>21</maven.compiler.source>,Adoptium JDK 21 LTS,publicado,Suporte a virtual threads e Garbage Collectors modernos
+2,Ambiente,jMetal,7.8,pom.xml:<version>7.8</version>,jMetal GitHub Release 7.8,publicado,Biblioteca base do experimento
+3,Algoritmos,NSGA-III,"H1, H2 de Das & Dennis",StaticParams.java:getOuterDivisions / getInnerDivisions,"Deb & Jain (2014), IEEE TEVC",publicado,Divisão canônica em 1 ou 2 camadas para MaOO
+4,Algoritmos,MOEA/DD,"PBI theta=5.0, T=20, delta=0.9, nr=2",WFGStudy.java:buildMOEADD,"Li et al. (2015), IEEE TEVC",publicado,Decomposição com balanceamento de dominância
+5,Algoritmos,FDEA,Fuzzy dominance + autodecomposição,FDEA.java:execute,"Wang et al. (2016), IEEE TEVC",publicado,Fuzzy angles e eliminação de dominadas
+6,Algoritmos,RVEA,"alpha=2.0, fr=0.1",WFGStudy.java:buildRVEA,"Cheng et al. (2016), IEEE TEVC",publicado,Penalização adaptativa por ângulo
+7,Algoritmos,AGE-MOEA,p-norm adaptativa,WFGStudy.java:buildAGEMOEA,"Panichella (2019), GECCO",publicado,Ajuste de geometria no simplex
+8,Algoritmos,AGE-MOEA-II,Projeção não-euclidiana,WFGStudy.java:buildAGE2,"Panichella (2022), IEEE TEVC",publicado,Variante refinada com preservação de extremos
+9,Operadores,SBX,"pc=1.0, eta_c=30.0",WFGStudy.java:new SBXCrossover(1.0, 30.0),"Deb et al. (2002), IEEE TEVC",publicado,Operador contínuo clássico para benchmarks contínuos
+10,Operadores,Polinomial,"pm=1/n, eta_m=20.0",WFGStudy.java:new PolynomialMutation(1.0/n, 20.0),"Deb & Goyal (1996)",publicado,Mutação polinomial padrão
+11,População,Tamanhos por m,"100, 91, 210, 156, 275, 135",StaticParams.java:getPopulationSize,"Das & Dennis (1998)",publicado,Malha simplex canônica para m in {2,3,5,8,10,15}
+12,Orçamento,Avaliações,"B = maxGen * N",EvaluationBudgetProblem.java,"StaticParams.getMaxGenerations",derivado,Controle rigoroso de avaliações sem estouro
+13,Pesos,MOEA/DD,Zero-replaced 1e-5,ReferenceSetValidator.java:validateZeroReplacedCanonical,"MOEAD_Weights/*.dat",confirmada,Prevenção de divisão por zero mantendo soma unitária
+14,Frentes,Pareto CSV,160 arquivos oficiais,ParetoFrontValidator.java:validateFile,"pareto_fronts/csv/",confirmada,Equivalência SHA-256 com jMetal oficial
+15,Normalização,HV Referência,"2.2j (WFG), 1.1 (DTLZ)",StaticParams.java:getHypervolumeReferencePoint,"While et al. (2012)",derivado,Dominação estrita de 100% dos pontos da frente
+16,Hipervolume,Supervisor,ProcessIsolatedExecutor,ProcessIsolatedHypervolumeExecutor.java,"T20 Arquitetura",engenharia,Encerramento garantido de workers não cooperativos
+17,Hipervolume,Estimador MC,Wilson Score CI 95%,MonteCarloHypervolume.java,"Wilson (1927), JASA",publicado,Tratamento rigoroso de X=0 com limite superior positivo
+18,Estatística,Omnibus,Kruskal-Wallis com empates,KruskalWallisTest.java,"Kruskal & Wallis (1952)",publicado,Teste não-paramétrico independente de distribuição
+19,Estatística,Pós-teste,Dunn-Holm FWER,DunnPostHocTest.java,"Dunn (1964) / Holm (1979)",publicado,Comparações par-a-par com controle estrito de falso positivo
+20,Estatística,Efeito,"Vargha-Delaney A12, Cliff delta",DunnPostHocTest.java:computeVarghaDelaneyA12,"Vargha & Delaney (2000)",publicado,Magnitude padronizada da diferença probabilística
+

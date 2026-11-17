@@ -16,7 +16,7 @@ Este documento registra a auditoria exaustiva e a validação matemática das fr
    - Derivação exata da curva degenerada 1D de `DTLZ5` e `DTLZ6` para $m \ge 3$;
    - Derivação exata dos $2^{m-1}$ componentes desconexos e do domínio analítico $[f_m^{\min}(m), 2m]$ do último objetivo $f_m$ em `DTLZ7`.
 4. **Modos Controlados Desativados por Padrão**:
-   - `-DgenerateAllReferenceFronts=false` (geração analítica validada em `resources/referenceFronts/pf_gen/analytical/`);
+   - `-DgenerateAllReferenceFronts=false` (geração analítica validada em `resources/referenceFronts/pf_gen/`);
    - `-DgenerateEmpiricalReferenceFronts=false` (consolidação empírica não-dominada com metadados em `resources/referenceFronts/pf_gen/empirical/`).
 
 ---
@@ -204,7 +204,7 @@ Em conformidade com as regras da Tarefa T07, foram implementados em `ParetoFront
 
 - **Quando `false` (padrão)**: `WFGStudy.addToProblemList` mantém inalterado o comportamento parcial atual do estudo (inclui `DTLZ1–DTLZ7` apenas para $m \le 3$, totalizando 68 configurações de problemas).
 - **Quando `true`**: Para cada $m > 3$ ($m \in \{5, 8, 10, 15\}$) e cada `DTLZ1–DTLZ7`, `WFGStudy` invoca `ParetoFrontValidator.generateAndSaveAnalyticalDtlzFront(...)`, que:
-  1. Gera a frente analítica em `resources/referenceFronts/pf_gen/analytical/DTLZ{p}.{m}D.csv`:
+  1. Gera a frente analítica em `resources/referenceFronts/pf_gen/DTLZ{p}.{m}D.csv`:
      - `DTLZ1`: simplex de Das & Dennis / Deb & Jain escalado por $0.5$ ($\sum_{j=1}^m f_j = 0.5$);
      - `DTLZ2–DTLZ4`: projeção radial na esfera unitária positiva ($\sum_{j=1}^m f_j^2 = 1$);
      - `DTLZ5–DTLZ6`: amostragem uniforme de $\theta_0 \in [0, \pi/2]$ sobre a curva 1D exata da subvariedade $g = 0$ do jMetal 7.8;

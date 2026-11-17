@@ -828,26 +828,36 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Resolve o caminho do arquivo CSV da frente de referência oficial em {@code pareto_fronts/csv/}
-     * para o problema e dimensão \(m\).
+     * Resolve o caminho do arquivo CSV da frente de referência para o problema e dimensão \(m\)
+     * seguindo a hierarquia canônica:
+     * 1. {@code resources/referenceFronts/<PROBLEM>.<m>D.csv};
+     * 2. {@code resources/referenceFronts/pf_gen/<PROBLEM>.<m>D.csv};
+     * 3. Fallback legado {@code pareto_fronts/csv/<PROBLEM>.<m>D.csv}.
      *
      * @param problemName nome do problema (ex.: {@code "WFG4"}, {@code "DTLZ2"})
      * @param m número de objetivos
-     * @return {@link Path} para {@code pareto_fronts/csv/<PROBLEM>.<m>D.csv}
+     * @return {@link Path} para o arquivo CSV resolvido
      */
     public static Path resolveReferenceFrontPath(String problemName, int m) {
         String canonical = StaticParams.normalizeProblemId(problemName);
-        Path path = Path.of("pareto_fronts", "csv", canonical + "." + m + "D.csv");
-        if (!Files.exists(path)) {
-            throw new IllegalArgumentException(
-                    "Frente de referência não encontrada em pareto_fronts/csv para "
-                            + canonical
-                            + " com m="
-                            + m
-                            + ": "
-                            + path);
+        String fileName = canonical + "." + m + "D.csv";
+        Path canonicalPath = Path.of("resources", "referenceFronts", fileName);
+        if (Files.exists(canonicalPath)) {
+            return canonicalPath;
         }
-        return path;
+        Path pfGenPath = Path.of("resources", "referenceFronts", "pf_gen", fileName);
+        if (Files.exists(pfGenPath)) {
+            return pfGenPath;
+        }
+        Path legacyPath = Path.of("pareto_fronts", "csv", fileName);
+        if (Files.exists(legacyPath)) {
+            return legacyPath;
+        }
+        throw new IllegalArgumentException(
+                "Frente de referência não encontrada na hierarquia canônica para "
+                        + canonical
+                        + " com m="
+                        + m);
     }
 
     /**

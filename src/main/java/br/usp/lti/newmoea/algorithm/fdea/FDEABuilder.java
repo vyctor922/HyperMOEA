@@ -18,10 +18,12 @@ public class FDEABuilder implements AlgorithmBuilder<Algorithm<List<DoubleSoluti
     private final Problem<DoubleSolution> problem;
     private int populationSize = 100;
     private int maxGenerations = 250;
+    private boolean maxGenerationsExplicitlySet = false;
     private int maxEvaluations = 0;
     private CrossoverOperator<DoubleSolution> crossoverOperator;
     private MutationOperator<DoubleSolution> mutationOperator;
     private SelectionOperator<List<DoubleSolution>, DoubleSolution> selectionOperator;
+    private FDEA.VERSION version = FDEA.VERSION.I;
 
     public FDEABuilder(Problem<DoubleSolution> problem) {
         this.problem = problem;
@@ -34,6 +36,7 @@ public class FDEABuilder implements AlgorithmBuilder<Algorithm<List<DoubleSoluti
 
     public FDEABuilder setMaxGenerations(int maxGenerations) {
         this.maxGenerations = maxGenerations;
+        this.maxGenerationsExplicitlySet = true;
         return this;
     }
 
@@ -54,6 +57,11 @@ public class FDEABuilder implements AlgorithmBuilder<Algorithm<List<DoubleSoluti
 
     public FDEABuilder setSelectionOperator(SelectionOperator<List<DoubleSolution>, DoubleSolution> selectionOperator) {
         this.selectionOperator = selectionOperator;
+        return this;
+    }
+
+    public FDEABuilder setVersion(FDEA.VERSION version) {
+        this.version = version != null ? version : FDEA.VERSION.I;
         return this;
     }
 
@@ -85,16 +93,25 @@ public class FDEABuilder implements AlgorithmBuilder<Algorithm<List<DoubleSoluti
         return selectionOperator;
     }
 
+    public FDEA.VERSION getVersion() {
+        return version;
+    }
+
     @Override
     public Algorithm<List<DoubleSolution>> build() {
+        int effectiveMaxGenerations = maxGenerations;
+        if (!maxGenerationsExplicitlySet && maxEvaluations > 0 && populationSize > 0) {
+            effectiveMaxGenerations = (int) Math.ceil((double) maxEvaluations / populationSize);
+        }
         return new FDEA(
                 problem,
                 populationSize,
-                maxGenerations,
+                effectiveMaxGenerations,
                 maxEvaluations,
                 crossoverOperator,
                 mutationOperator,
-                selectionOperator
+                selectionOperator,
+                version
         );
     }
 }

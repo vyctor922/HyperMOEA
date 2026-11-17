@@ -615,7 +615,7 @@ class ParetoFrontValidationTest {
                     .extracting(org.uma.jmetal.lab.experiment.util.ExperimentProblem::getTag)
                     .allMatch(tag -> tag.startsWith("WFG"));
 
-            // 2. Quando -DgenerateAllReferenceFronts=true, m=5 gera e valida as 7 frentes DTLZ em resources/referenceFronts/pf_gen/analytical/
+            // 2. Quando -DgenerateAllReferenceFronts=true, m=5 gera e valida as 7 frentes DTLZ em resources/referenceFronts/pf_gen/
             //    e adiciona 9 WFG + 7 DTLZ = 16 problemas
             System.setProperty(ParetoFrontValidator.GENERATE_ALL_REFERENCE_FRONTS_PROPERTY, "true");
             assertThat(ParetoFrontValidator.isGenerateAllReferenceFrontsEnabled()).isTrue();

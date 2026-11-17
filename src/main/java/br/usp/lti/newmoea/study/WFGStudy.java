@@ -137,6 +137,26 @@ public class WFGStudy {
     public static final String StudyName = "WFGStudy";
     public static double epsilon = 0.01;
 
+    public static final String DEFAULT_LEGACY_WEIGHTS_DIRECTORY = "MOEAD_Weights";
+    public static final String DEFAULT_WEIGHTS_DIRECTORY = "resources/weightVectorFiles";
+    public static final String DEFAULT_REFERENCE_FRONT_DIRECTORY = "resources/referenceFronts";
+
+    public static boolean shouldIncludeLegacyAlgorithms() {
+        return Boolean.getBoolean("study.includeLegacyAlgorithms");
+    }
+
+    public static String getStudyName() {
+        return System.getProperty("study.outputDirectory", StudyName);
+    }
+
+    public static String getWeightsDirectory() {
+        return System.getProperty("study.weightsDirectory", DEFAULT_WEIGHTS_DIRECTORY);
+    }
+
+    public static String getReferenceFrontDirectory() {
+        return System.getProperty("study.referenceFrontDirectory", DEFAULT_REFERENCE_FRONT_DIRECTORY);
+    }
+
     /**
      * Tolerância de soma para validação dos arquivos de pesos do MOEA/DD (acolhe a substituição
      * \(0 \mapsto 10^{-5}\) presente em {@code MOEAD_Weights/}, cujo desvio máximo é \(14 \times 10^{-5}\) em \(m=15\)).
@@ -147,7 +167,8 @@ public class WFGStudy {
     public static final double MOEAD_WEIGHT_DUPLICATE_TOLERANCE = 1e-7;
 
     public static void main(String[] args) throws IOException {
-        Files.createDirectories(Paths.get(experimentBaseDirectory + "/" + StudyName));
+        String outputDir = getStudyName();
+        Files.createDirectories(Paths.get(experimentBaseDirectory + "/" + outputDir));
         List<ExperimentProblem<DoubleSolution>> problemList = new ArrayList<>();
         for (int i = 0; i < M.length; i++) {
             int m = M[i];
@@ -155,14 +176,16 @@ public class WFGStudy {
             addToProblemList(problemList, m, k);
         }
 
+        runPreflightValidation(problemList);
+
         List<ExperimentAlgorithm<DoubleSolution, List<DoubleSolution>>> algorithmList
                 = configureAlgorithmList(problemList);
 
         Experiment<DoubleSolution, List<DoubleSolution>> experiment
-                = new ExperimentBuilder<DoubleSolution, List<DoubleSolution>>(StudyName)
+                = new ExperimentBuilder<DoubleSolution, List<DoubleSolution>>(outputDir)
                         .setAlgorithmList(algorithmList)
                         .setProblemList(problemList)
-                        .setReferenceFrontDirectory("pareto_fronts/csv")
+                        .setReferenceFrontDirectory(getReferenceFrontDirectory())
                         .setExperimentBaseDirectory(experimentBaseDirectory)
                         .setOutputParetoFrontFileName("FUN")
                         .setOutputParetoSetFileName("VAR")
@@ -230,39 +253,69 @@ public class WFGStudy {
 
     // }
 
+    /**
+     * Resolve o caminho relativo da frente de referência para o estudo seguindo a hierarquia canônica:
+     * 1. {@code resources/referenceFronts/};
+     * 2. {@code resources/referenceFronts/pf_gen/};
+     * 3. Geração matemática sob demanda em {@code resources/referenceFronts/pf_gen/}.
+     *
+     * <p>Caso {@code -DreplaceZeroFronts=true}, resolve a variante com substituição de coordenadas zero em
+     * {@code resources/referenceFronts/pf_lowzero_gen/}, isolada de {@code pf_gen/}.
+     *
+     * @param problemName nome do problema (ex.: {@code "WFG1"}, {@code "DTLZ2"})
+     * @param m número de objetivos
+     * @return caminho relativo padronizado para consumo pelo jMetal
+     */
+    public static String resolveReferenceFrontForStudy(String problemName, int m) {
+        boolean useLowZero = ParetoFrontValidator.isReplaceZeroFrontsEnabled();
+        Path refFile = ParetoFrontValidator.resolveCanonicalReferenceFront(
+                problemName,
+                m,
+                Paths.get(DEFAULT_REFERENCE_FRONT_DIRECTORY),
+                ParetoFrontValidator.DEFAULT_ANALYTICAL_PF_GEN_DIR,
+                ParetoFrontValidator.DEFAULT_LOWZERO_PF_GEN_DIR,
+                useLowZero,
+                true);
+        Path activeRefDir = Paths.get(getReferenceFrontDirectory());
+        if (refFile.startsWith(activeRefDir)) {
+            return activeRefDir.relativize(refFile).toString().replace('\\', '/');
+        }
+        return refFile.toString().replace('\\', '/');
+    }
+
     static void addToProblemList(List<ExperimentProblem<DoubleSolution>> problemList, int m, int k) {
-        addIfAllowed(problemList, new ExperimentProblem<>(new WFG1(k, L, m), "WFG1_" + m).setReferenceFront("WFG1." + m + "D.csv"));
-        addIfAllowed(problemList, new ExperimentProblem<>(new WFG2(k, L, m), "WFG2_" + m).setReferenceFront("WFG2." + m + "D.csv"));
-        addIfAllowed(problemList, new ExperimentProblem<>(new WFG3(k, L, m), "WFG3_" + m).setReferenceFront("WFG3." + m + "D.csv"));
-        addIfAllowed(problemList, new ExperimentProblem<>(new WFG4(k, L, m), "WFG4_" + m).setReferenceFront("WFG4." + m + "D.csv"));
-        addIfAllowed(problemList, new ExperimentProblem<>(new WFG5(k, L, m), "WFG5_" + m).setReferenceFront("WFG5." + m + "D.csv"));
-        addIfAllowed(problemList, new ExperimentProblem<>(new WFG6(k, L, m), "WFG6_" + m).setReferenceFront("WFG6." + m + "D.csv"));
-        addIfAllowed(problemList, new ExperimentProblem<>(new WFG7(k, L, m), "WFG7_" + m).setReferenceFront("WFG7." + m + "D.csv"));
-        addIfAllowed(problemList, new ExperimentProblem<>(new WFG8(k, L, m), "WFG8_" + m).setReferenceFront("WFG8." + m + "D.csv"));
-        addIfAllowed(problemList, new ExperimentProblem<>(new WFG9(k, L, m), "WFG9_" + m).setReferenceFront("WFG9." + m + "D.csv"));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG1(k, L, m), "WFG1_" + m).setReferenceFront(resolveReferenceFrontForStudy("WFG1", m)));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG2(k, L, m), "WFG2_" + m).setReferenceFront(resolveReferenceFrontForStudy("WFG2", m)));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG3(k, L, m), "WFG3_" + m).setReferenceFront(resolveReferenceFrontForStudy("WFG3", m)));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG4(k, L, m), "WFG4_" + m).setReferenceFront(resolveReferenceFrontForStudy("WFG4", m)));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG5(k, L, m), "WFG5_" + m).setReferenceFront(resolveReferenceFrontForStudy("WFG5", m)));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG6(k, L, m), "WFG6_" + m).setReferenceFront(resolveReferenceFrontForStudy("WFG6", m)));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG7(k, L, m), "WFG7_" + m).setReferenceFront(resolveReferenceFrontForStudy("WFG7", m)));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG8(k, L, m), "WFG8_" + m).setReferenceFront(resolveReferenceFrontForStudy("WFG8", m)));
+        addIfAllowed(problemList, new ExperimentProblem<>(new WFG9(k, L, m), "WFG9_" + m).setReferenceFront(resolveReferenceFrontForStudy("WFG9", m)));
 
         if (m <= 3) {
-            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ1(L, m), "DTLZ1_" + m).setReferenceFront("DTLZ1." + m + "D.csv"));
-            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ2(L, m), "DTLZ2_" + m).setReferenceFront("DTLZ2." + m + "D.csv"));
-            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ3(L, m), "DTLZ3_" + m).setReferenceFront("DTLZ3." + m + "D.csv"));
-            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ4(L, m), "DTLZ4_" + m).setReferenceFront("DTLZ4." + m + "D.csv"));
-            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ5(L, m), "DTLZ5_" + m).setReferenceFront("DTLZ5." + m + "D.csv"));
-            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ6(L, m), "DTLZ6_" + m).setReferenceFront("DTLZ6." + m + "D.csv"));
-            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ7(L, m), "DTLZ7_" + m).setReferenceFront("DTLZ7." + m + "D.csv"));
-        } else if (ParetoFrontValidator.isGenerateAllReferenceFrontsEnabled()) {
+            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ1(L, m), "DTLZ1_" + m).setReferenceFront(resolveReferenceFrontForStudy("DTLZ1", m)));
+            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ2(L, m), "DTLZ2_" + m).setReferenceFront(resolveReferenceFrontForStudy("DTLZ2", m)));
+            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ3(L, m), "DTLZ3_" + m).setReferenceFront(resolveReferenceFrontForStudy("DTLZ3", m)));
+            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ4(L, m), "DTLZ4_" + m).setReferenceFront(resolveReferenceFrontForStudy("DTLZ4", m)));
+            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ5(L, m), "DTLZ5_" + m).setReferenceFront(resolveReferenceFrontForStudy("DTLZ5", m)));
+            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ6(L, m), "DTLZ6_" + m).setReferenceFront(resolveReferenceFrontForStudy("DTLZ6", m)));
+            addIfAllowed(problemList, new ExperimentProblem<>(new DTLZ7(L, m), "DTLZ7_" + m).setReferenceFront(resolveReferenceFrontForStudy("DTLZ7", m)));
+        } else if (ParetoFrontValidator.isGenerateAllReferenceFrontsEnabled()
+                || (System.getProperty("problem") != null && !System.getProperty("problem").isBlank())) {
             addAnalyticalDtlzProblemsForManyObjectives(problemList, m);
         }
     }
 
     /**
-     * Quando {@code -DgenerateAllReferenceFronts=true}, gera e valida matematicamente as frentes
-     * analíticas de {@code DTLZ1–DTLZ7} para \(m > 3\) em
-     * {@code resources/referenceFronts/pf_gen/analytical/} antes de habilitar cada combinação no estudo.
+     * Quando {@code -DgenerateAllReferenceFronts=true}, resolve matematicamente as frentes
+     * analíticas de {@code DTLZ1–DTLZ7} para \(m > 3\) respeitando a hierarquia canônica
+     * (1: {@code resources/referenceFronts/}, 2: {@code pf_gen/}, 3: geração por código)
+     * antes de habilitar cada combinação no estudo.
      */
     private static void addAnalyticalDtlzProblemsForManyObjectives(
             List<ExperimentProblem<DoubleSolution>> problemList, int m) {
-        int h1 = StaticParams.getOuterDivisions(m);
-        int h2 = StaticParams.getInnerDivisions(m);
         Problem<DoubleSolution>[] dtlzProblems = new Problem[]{
             new DTLZ1(L, m),
             new DTLZ2(L, m),
@@ -279,23 +332,10 @@ public class WFGStudy {
             if (!shouldIncludeProblem(tag)) {
                 continue;
             }
-            Path generatedFront = ParetoFrontValidator.generateAndSaveAnalyticalDtlzFront(
-                    problemName,
-                    m,
-                    h1,
-                    h2,
-                    ParetoFrontValidator.DEFAULT_ANALYTICAL_PF_GEN_DIR,
-                    true).outputFile();
-            String relativeFromParetoFrontsDir = Paths.get("pareto_fronts", "csv")
-                    .toAbsolutePath()
-                    .normalize()
-                    .relativize(generatedFront.toAbsolutePath().normalize())
-                    .toString()
-                    .replace('\\', '/');
             addIfAllowed(
                     problemList,
                     new ExperimentProblem<>(dtlzProblems[idx], tag)
-                            .setReferenceFront(relativeFromParetoFrontsDir));
+                            .setReferenceFront(resolveReferenceFrontForStudy(problemName, m)));
         }
     }
 
@@ -319,9 +359,11 @@ public class WFGStudy {
                 MutationOperator mutation = new PolynomialMutation(1.0 / problem.numberOfVariables(), 20.0);
                 CrossoverOperator de = new DifferentialEvolutionCrossover();
 
-                algorithms.add(new ExperimentAlgorithm<>(buildNSGAII(problem, populationSize, crossover, mutation), problemList.get(i), run));
-                algorithms.add(new ExperimentAlgorithm<>(buildSPEA2(problem, populationSize, crossover, mutation), problemList.get(i), run));
-                algorithms.add(new ExperimentAlgorithm<>(buildMOEADDRA(problem, populationSize, de, mutation), problemList.get(i), run));
+                if (shouldIncludeLegacyAlgorithms()) {
+                    algorithms.add(new ExperimentAlgorithm<>(buildNSGAII(problem, populationSize, crossover, mutation), problemList.get(i), run));
+                    algorithms.add(new ExperimentAlgorithm<>(buildSPEA2(problem, populationSize, crossover, mutation), problemList.get(i), run));
+                    algorithms.add(new ExperimentAlgorithm<>(buildMOEADDRA(problem, populationSize, de, mutation), problemList.get(i), run));
+                }
 
                 // 1. NSGA-III: Orientado à qualidade do conjunto por hiperplano de referência
                 algorithms.add(new ExperimentAlgorithm<>(buildNSGAIII(problem, populationSize, crossover, mutation), problemList.get(i), run));
@@ -336,8 +378,10 @@ public class WFGStudy {
                 // 6. AGE-MOEA-II: Variante refinada com geometria adaptativa não-euclidiana
                 algorithms.add(new ExperimentAlgorithm<>(buildAGE2(problem, populationSize, crossover, mutation), problemList.get(i), run));
 
-                algorithms.add(new ExperimentAlgorithm<>(buildESPEA(problem, populationSize, crossover, mutation), problemList.get(i), run));
-                algorithms.add(new ExperimentAlgorithm<>(buidGWASFGA(problem, populationSize, crossover, mutation), problemList.get(i), run));
+                if (shouldIncludeLegacyAlgorithms()) {
+                    algorithms.add(new ExperimentAlgorithm<>(buildESPEA(problem, populationSize, crossover, mutation), problemList.get(i), run));
+                    algorithms.add(new ExperimentAlgorithm<>(buidGWASFGA(problem, populationSize, crossover, mutation), problemList.get(i), run));
+                }
             }
 
         }
@@ -409,7 +453,7 @@ public class WFGStudy {
     }
 
     static Algorithm buildMOEADDRA(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
-        validateMoeadWeightFile("MOEAD_Weights", problem, populationSize);
+        validateMoeadWeightFile(getWeightsDirectory(), problem, populationSize);
         MOEADBuilder moead = new MOEADBuilder(problem, MOEADBuilder.Variant.MOEADDRA)
                 .setCrossover(crossover)
                 .setMutation(mutation)
@@ -419,7 +463,7 @@ public class WFGStudy {
                 .setNeighborhoodSelectionProbability(0.9)
                 .setMaximumNumberOfReplacedSolutions(2)
                 .setNeighborSize(20)
-                .setDataDirectory("MOEAD_Weights")
+                .setDataDirectory(getWeightsDirectory())
                 .setFunctionType(AbstractMOEAD.FunctionType.PBI);
 
         return moead.build();
@@ -504,8 +548,37 @@ public class WFGStudy {
                 .build();
     } //
 
+    /**
+     * Resolve o diretório que contém o arquivo de pesos do MOEA/DD respeitando a precedência:
+     * 1. {@code baseWeightsDir} (padrão {@code resources/weightVectorFiles});
+     * 2. Subpasta {@code weights_gen/} dentro de {@code baseWeightsDir};
+     * 3. Fallback legado {@code MOEAD_Weights/}.
+     *
+     * @param baseWeightsDir diretório base configurado
+     * @param m número de objetivos
+     * @param populationSize tamanho da população
+     * @return caminho em String do diretório que contém o arquivo
+     */
+    public static String resolveMoeadDataDirectory(String baseWeightsDir, int m, int populationSize) {
+        String fileName = "W" + m + "D_" + populationSize + ".dat";
+        Path p1 = Paths.get(baseWeightsDir, fileName);
+        if (Files.exists(p1)) {
+            return baseWeightsDir;
+        }
+        Path p2 = Paths.get(baseWeightsDir, "weights_gen", fileName);
+        if (Files.exists(p2)) {
+            return Paths.get(baseWeightsDir, "weights_gen").toString().replace('\\', '/');
+        }
+        Path p3 = Paths.get(DEFAULT_LEGACY_WEIGHTS_DIRECTORY, fileName);
+        if (Files.exists(p3)) {
+            return DEFAULT_LEGACY_WEIGHTS_DIRECTORY;
+        }
+        return baseWeightsDir;
+    }
+
     public static Algorithm buildMOEADD(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
-        validateMoeadWeightFile("MOEAD_Weights", problem, populationSize);
+        String effectiveDataDir = resolveMoeadDataDirectory(getWeightsDirectory(), problem.numberOfObjectives(), populationSize);
+        validateMoeadWeightFile(effectiveDataDir, problem, populationSize);
 
         // Nota sobre PBI no jMetal 7.8: AbstractMOEAD.fitnessFunction fixa internamente theta = 5.0
         // para FunctionType.PBI, e MOEADBuilder não expõe setter para theta.
@@ -518,7 +591,7 @@ public class WFGStudy {
                 .setNeighborhoodSelectionProbability(0.9)
                 .setMaximumNumberOfReplacedSolutions(2)
                 .setNeighborSize(20)
-                .setDataDirectory("MOEAD_Weights") // setar pontos segundo a bibliografia
+                .setDataDirectory(effectiveDataDir)
                 .setFunctionType(AbstractMOEAD.FunctionType.PBI);
 
         return moead.build();
@@ -540,7 +613,8 @@ public class WFGStudy {
             throw new IllegalArgumentException("O problema não pode ser nulo na validação de pesos do MOEA/DD.");
         }
         int m = problem.numberOfObjectives();
-        Path weightPath = Paths.get(dataDirectory, "W" + m + "D_" + populationSize + ".dat");
+        String resolvedDir = resolveMoeadDataDirectory(dataDirectory, m, populationSize);
+        Path weightPath = Paths.get(resolvedDir, "W" + m + "D_" + populationSize + ".dat");
         return ReferenceSetValidator.validateMoeadWeightFile(
                 weightPath,
                 m,
@@ -549,14 +623,59 @@ public class WFGStudy {
                 MOEAD_WEIGHT_DUPLICATE_TOLERANCE);
     }
 
+    /**
+     * Validação prévia de voo (preflight) estrita: verifica a integridade de todas
+     * as configurações antes da instanciação e execução dos algoritmos (T23).
+     *
+     * @param problemList lista de problemas configurados
+     */
+    public static void runPreflightValidation(List<ExperimentProblem<DoubleSolution>> problemList) {
+        if (problemList == null || problemList.isEmpty()) {
+            throw new IllegalStateException("Preflight falhou: lista de problemas está vazia.");
+        }
+        for (ExperimentProblem<DoubleSolution> expProblem : problemList) {
+            Problem<?> p = expProblem.getProblem();
+            int m = p.numberOfObjectives();
+            int popSize = StaticParams.getPopulationSize(m);
+
+            // 1. Validação dos pesos do MOEA/DD
+            validateMoeadWeightFile(getWeightsDirectory(), p, popSize);
+
+            // 2. Validação dos pontos de referência do NSGA-III
+            int outer = StaticParams.getOuterDivisions(m);
+            int inner = StaticParams.getInnerDivisions(m);
+            int expectedNsgaIII = ReferenceSetValidator.expectedTwoLayerPoints(m, outer, inner);
+            if (popSize != expectedNsgaIII) {
+                throw new IllegalStateException(String.format(
+                        "Preflight falhou para NSGA-III em m=%d: popSize=%d difere do esperado=%d",
+                        m, popSize, expectedNsgaIII));
+            }
+
+            // 3. Validação do arquivo da frente de referência
+            String refFront = expProblem.getReferenceFront();
+            if (refFront == null || refFront.isBlank()) {
+                throw new IllegalStateException("Preflight falhou: frente de referência não definida para " + expProblem.getTag());
+            }
+            Path refPath = Paths.get(getReferenceFrontDirectory(), refFront);
+            if (!Files.exists(refPath)) {
+                Path fallbackPath = Paths.get("pareto_fronts", "csv", refFront);
+                if (!Files.exists(fallbackPath)) {
+                    Path rootRel = Paths.get(refFront);
+                    if (!Files.exists(rootRel)) {
+                        throw new IllegalStateException("Preflight falhou: arquivo de frente não encontrado: " + refFront + " para " + expProblem.getTag());
+                    }
+                }
+            }
+        }
+    }
+
     static Algorithm buidGWASFGA(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {
         SolutionListEvaluator evaluator = new SequentialSolutionListEvaluator<>();
         SelectionOperator<List<DoubleSolution>, DoubleSolution> selectionOperator = new BinaryTournamentSelection<>(
                 new RankingAndCrowdingDistanceComparator<>());
-        String dataFileName;
-        dataFileName = "W" + problem.numberOfObjectives() + "D_" + populationSize + ".dat"; // nome dos arquivos de pesos (seria bom ter problema e nome do algoritmo)
-        return new GWASFGA(problem, populationSize, StaticParams.getMaxGenerations(problem.numberOfObjectives(), problem.name()), crossover, mutation, selectionOperator, evaluator, epsilon, "MOEAD_Weights/" + dataFileName);
-
+        String effectiveDataDir = resolveMoeadDataDirectory(getWeightsDirectory(), problem.numberOfObjectives(), populationSize);
+        String dataFileName = "W" + problem.numberOfObjectives() + "D_" + populationSize + ".dat";
+        return new GWASFGA(problem, populationSize, StaticParams.getMaxGenerations(problem.numberOfObjectives(), problem.name()), crossover, mutation, selectionOperator, evaluator, epsilon, effectiveDataDir + "/" + dataFileName);
     }
 
     static Algorithm buildESPEA(Problem problem, int populationSize, CrossoverOperator crossover, MutationOperator mutation) {

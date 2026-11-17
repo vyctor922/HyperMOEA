@@ -125,7 +125,7 @@ O pipeline de pós-processamento (`ComputeQualityIndicators`) e a suíte de vali
 * **Suíte WFG (`WFG1` a `WFG9`)**: Instâncias escaláveis com fronteiras não-separáveis, deceptivas, multimodalidade, viés paramétrico e formatos mistos (convexas, côncavas, lineares e desconexas). Habilitadas por padrão em todas as 6 dimensões $m \in \{2, 3, 5, 8, 10, 15\}$ (`54` frentes oficiais validadas em `pareto_fronts/csv/WFG{1..9}.{2,3,5,8,10,15}D.csv`).
 * **Suíte DTLZ (`DTLZ1` a `DTLZ7`)**: Problemas escaláveis com geometrias lineares (`DTLZ1`), côncavas esféricas (`DTLZ2`–`DTLZ4`), curvas 1D degeneradas (`DTLZ5`–`DTLZ6`) e $2^{m-1}$ regiões desconexas (`DTLZ7`).
   - **Comportamento padrão**: Habilitados em $m \in \{2, 3\}$ (`14` frentes oficiais validadas em `pareto_fronts/csv/DTLZ{1..7}.{2,3}D.csv`), totalizando **68 configurações de problemas ativas por padrão**.
-  - **Extensão analítica opcional para $m \in \{5, 8, 10, 15\}$**: Como o repositório oficial do jMetal 7.8 não distribui frentes DTLZ para $m \in \{5, 10, 15\}$ (nem `DTLZ5/6` para $m=8$), `ParetoFrontValidator` implementa a geração matemática analítica validada para `DTLZ1–DTLZ7` em qualquer $m \in \{2, 3, 5, 8, 10, 15\}$ (`resources/referenceFronts/pf_gen/analytical/`), ativável sob demanda via `-DgenerateAllReferenceFronts=true`.
+  - **Extensão analítica opcional para $m \in \{5, 8, 10, 15\}$**: Como o repositório oficial do jMetal 7.8 não distribui frentes DTLZ para $m \in \{5, 10, 15\}$ (nem `DTLZ5/6` para $m=8$), `ParetoFrontValidator` implementa a geração matemática analítica validada para `DTLZ1–DTLZ7` em qualquer $m \in \{2, 3, 5, 8, 10, 15\}$ (`resources/referenceFronts/pf_gen/`), ativável sob demanda via `-DgenerateAllReferenceFronts=true`.
 
 ### 4.2 Dimensionalidade dos Objetivos ($m$), Camadas e Orçamentos (`StaticParams.java`)
 O estudo contempla as dimensões $m \in \{2, 3, 5, 8, 10, 15\}$, com orçamento comum $\text{maxEvaluations} = \text{maxGenerations} \times \text{populationSize}$:
@@ -143,7 +143,7 @@ O estudo contempla as dimensões $m \in \{2, 3, 5, 8, 10, 15\}$, com orçamento 
 Todas as opções experimentais da Fase 2 permanecem **desativadas (`false`) por padrão** para preservar a configuração canônica do estudo e a integridade dos diretórios originais:
 * `-DpersistReferencePoints=false`: Quando `true`, persiste os pontos de referência do `NSGA-III` em `resources/referencePoints/nsgaiii/`.
 * `-DpersistReferenceDirections=false`: Quando `true`, persiste as direções de referência do `RVEA` em `resources/referencePoints/rvea/`.
-* `-DgenerateAllReferenceFronts=false`: Quando `true`, gera e valida matematicamente as frentes analíticas de `DTLZ1–DTLZ7` para $m > 3$ em `resources/referenceFronts/pf_gen/analytical/` e as habilita no estudo.
+* `-DgenerateAllReferenceFronts=false`: Quando `true`, gera e valida matematicamente as frentes analíticas de `DTLZ1–DTLZ7` para $m > 3$ em `resources/referenceFronts/pf_gen/` e as habilita no estudo.
 * `-DgenerateEmpiricalReferenceFronts=false`: Quando `true`, habilita a geração controlada de frentes empíricas não-dominadas com arquivo `.meta.txt` em `resources/referenceFronts/pf_gen/empirical/`.
 * `-DreplaceZeroWeights=false`: Quando `true`, habilita a geração de variantes de vetores de peso com substituição $0 \mapsto 10^{-5}$ em `resources/weightVectorFiles/weights_gen/`.
 * `-DprofilePerformance=false`: Quando `true`, executa a bateria padronizada de avaliação de desempenho ao final de `WFGStudy.main`.
@@ -368,7 +368,99 @@ Abaixo estão registradas todas as intervenções de engenharia de software e aj
    - Executados e validados `mvn clean compile`, `mvn clean test` (**277 testes executados em 10 classes, 0 falhas, 0 erros, 0 ignorados**) e os dois testes de fumaça fim a fim (`WFG1` em $m=2$ e `DTLZ2` em $m=3$ com `-Druns=1`), confirmando a gravação separada de `HV` e `NHV` e preservando integralmente os diretórios `MOEAD_Weights/`, `pareto_fronts/csv/` e `WFGStudy/`.
    - Atualizadas as seções 1 a 7 deste `README.md`.
 
+## Alterações 09/11/2026 - 10:50
+
+1. **Consolidação da Fase 3 (`T12`–`T24`) — Auditoria Forense, Orçamento, Isolamento, Hipervolume Híbrido, Contratos e Inferência Estatística**:
+   - **`T12` (Governança e Inventário Forense)**: Inventário exato de 304 arquivos (`docs/auditoria/inventario.csv`), matriz de bytecode do jMetal 7.8 via `javap` e conciliação de tarefas T01–T11.
+   - **`T13` (Contrato de Orçamento e População)**: Implementado [`EvaluationBudgetProblem.java`](src/main/java/br/usp/lti/newmoea/util/EvaluationBudgetProblem.java) assegurando contagem determinística do orçamento $B = \text{maxGenerations} \times N$ e parada estrita sem estouro (`17` testes em `EvaluationBudgetAuditTest`).
+   - **`T14` (Identidade Algorítmica do FDEA)**: Auditado contra o repositório de Wang et al. (2016), eliminando `new Random()` não-semeado em `FDEA.java`, corrigindo torneio binário sem ranking/crowding e loop guard estrito (`28` testes em `FdeaIdentityAndLegacyAuditTest`).
+   - **`T15` (Isolamento de Execução e RNG)**: Implementado [`IsolatedJobExecutor.java`](src/main/java/br/usp/lti/newmoea/util/IsolatedJobExecutor.java) com gerador determinístico SplitMix64 de 64 bits (0 colisões em 17.280 tuplas) e trava `ReentrantLock` contra condições de corrida do `JMetalRandom` (`15` testes em `IsolationAndReproducibilityTest`).
+   - **`T16` (Auditoria Física e Matemática de Frentes de Pareto)**: Reconciliação dos 160 arquivos CSV de referência, validação analítica com erro máximo $< 10^{-5}$ e geração exata para DTLZ $m>3$ (`168` testes em `ReferenceFrontPhysicalAndMathAuditTest`).
+   - **`T17` (Normalização e Invariância de Hipervolume)**: Prova analítica da invariância de postos de Kruskal-Wallis/Dunn entre HV e NHV, preservação de escala por jacobiano constante e cálculo em tempo constante $O(1)$ de NHV via [`ObjectiveNormalizationContract.java`](src/main/java/br/usp/lti/newmoea/util/ObjectiveNormalizationContract.java) (`37` testes em `NormalizationAndHvContractTest`).
+   - **`T18` (Resolução Canônica de Recursos)**: Implementado [`ArtifactResolver.java`](src/main/java/br/usp/lti/newmoea/util/ArtifactResolver.java) com políticas canônicas de resolução de pesos e frentes, auditando 114 artefatos ativos sem quebrar o repositório (`33` testes em `ArtifactResolverTest`).
+   - **`T19` (Contrato da População Final e FUN/VAR)**: Implementado [`ResultFrontContract.java`](src/main/java/br/usp/lti/newmoea/util/ResultFrontContract.java) com filtragem canônica de soluções não-dominadas, garantia de alinhamento estrito 1:1 entre FUN e VAR, remoção de duplicatas e contra-exemplo matemático provando a não-compatibilidade de Pareto do IGD euclidiano (`5` testes em `ResultFrontContractTest`).
+   - **`T20` (Hipervolume Híbrido, Isolamento de Processo e Fallback Monte Carlo)**: Implementados [`ProcessIsolatedHypervolumeExecutor.java`](src/main/java/br/usp/lti/newmoea/util/ProcessIsolatedHypervolumeExecutor.java), [`ExactHypervolumeWorker.java`](src/main/java/br/usp/lti/newmoea/util/ExactHypervolumeWorker.java) e [`MonteCarloHypervolume.java`](src/main/java/br/usp/lti/newmoea/util/MonteCarloHypervolume.java). O encerramento forçado via `destroyForcibly()` elimina threads zumbis do jMetal, e o fallback de Monte Carlo calcula o intervalo de confiança binomial de Wilson a 95% garantindo limite superior positivo para $X=0$ (`9` testes em `MonteCarloHypervolumeTest` e `ProcessIsolatedHypervolumeTest`).
+   - **`T21` (Inferência Estatística Não-Paramétrica)**: Implementados [`KruskalWallisTest.java`](src/main/java/br/usp/lti/newmoea/statistics/KruskalWallisTest.java) com midranks para empates e proteção contra $C=0$, pós-teste [`DunnPostHocTest.java`](src/main/java/br/usp/lti/newmoea/statistics/DunnPostHocTest.java) com controle de FWER por Holm (Dunn-Holm), tamanhos de efeito $\varepsilon^2$ e $\hat{A}_{12}$ de Vargha-Delaney, suite em JUnit 5 (`5` testes) e script de validação [`scripts/kruskal_dunn_holm.R`](scripts/kruskal_dunn_holm.R).
+   - **`T22` (Reauditoria de Desempenho e Piloto em 15 Objetivos)**: Testes de distinção entre sleep e busy-loop, isolamento de CPU de workers assíncronos e monitoramento de picos de heap em [`PerformanceProfilerPhase3Test.java`](src/test/java/br/usp/lti/newmoea/util/PerformanceProfilerPhase3Test.java) (`4` testes), com medição completa em $m=15$ sem truncamento populacional arbitrário.
+   - **`T23` (Integração e Homologação)**: Atualizado [`WFGStudy.java`](src/main/java/br/usp/lti/newmoea/study/WFGStudy.java) com ativação padrão exclusiva dos 6 algoritmos canônicos, controle de legados via `-Dstudy.includeLegacyAlgorithms=false`, suporte a diretório de saída dinâmico (`-Dstudy.outputDirectory`), preflight offline rigoroso (`WFGStudyPreflightTest.java`, `3` testes) e testes de fumaça ponta a ponta com sucesso.
+   - **`T24` (Consolidação Metodológica)**: Criação do dossiê científico completo em [`docs/methodology/`](docs/methodology/) (escopo, parâmetros, benchmarks, normalização, estatística, reprodutibilidade, limitações, matriz de evidências com 20 itens auditados e proposta de retificação do texto da dissertação).
+
 ---
+
+## Alterações 09/11/2026 - 17:00
+
+1. **Migração, Consolidação e Priorização de Recursos em `resources/`**:
+   - **Autorização Explícita e Hierarquia de 3 Níveis**: Estabelecida a precedência de carregamento: (1) `resources/`, (2) subpastas `_gen/`, (3) geração analítica/matemática por código existente.
+   - **Vetores de Pesos (`resources/weightVectorFiles/`)**: Migrados e sincronizados todos os 19 arquivos complementares faltantes de `MOEAD_Weights/` (incluindo `W2D_100.dat`, `W5D_210.dat` e `W15D_135.dat`), totalizando 48 arquivos `.dat` canônicos consolidados diretamente no diretório oficial de recursos.
+   - **Frentes de Pareto de Referência (`resources/referenceFronts/`)**: Consolidadas todas as 160 frentes de Pareto em CSV de `pareto_fronts/csv/` e as frentes analíticas de DTLZ em alta dimensão ($m \in \{5, 8, 10, 15\}$) de `pf_gen/`, totalizando 188 arquivos `.csv` canônicos na raiz de `resources/referenceFronts/`.
+2. **Atualização do Pipeline Principal `WFGStudy.java`**:
+   - Definidos `DEFAULT_WEIGHTS_DIRECTORY = "resources/weightVectorFiles"` e `DEFAULT_REFERENCE_FRONT_DIRECTORY = "resources/referenceFronts"`, configuráveis dinamicamente via `-Dstudy.weightsDirectory` e `-Dstudy.referenceFrontDirectory`.
+   - Eliminado integralmente o acoplamento frágil via `Path.relativize` (`../../resources/...`): todas as frentes de WFG1–9 e DTLZ1–7 em todas as dimensões $m \in \{2, 3, 5, 8, 10, 15\}$ são registradas como nomes de arquivo diretos (`{PROBLEM}.{m}D.csv`).
+   - Pré-validação estrita (`runPreflightValidation`) atualizada para verificar a integridade física e matemática dos vetores de pesos e frentes de Pareto diretamente em `resources/`.
+3. **Resolução Canônica de Artefatos (`ArtifactResolver.java`)**:
+   - Adicionadas as políticas `WeightSourcePolicy.RESOURCES_CONSOLIDATED` e `FrontSourcePolicy.RESOURCES_CONSOLIDATED`, com suporte à hierarquia de 3 níveis (`resources/` $\to$ `_gen/` $\to$ fallback/geração).
+   - Atualizado e exportado o manifesto canônico em [`docs/auditoria/artifact-manifest.csv`](docs/auditoria/artifact-manifest.csv) contendo 120 entradas ativas auditadas com hash SHA-256 e semântica de consumo em runtime.
+4. **Auditoria Forense Integral das Tasks 12 a 24 e Validação Completa**:
+   - Auditoria minuciosa de cada critério de aceitação de T12 a T24 confrontado diretamente com código-fonte, testes e documentação.
+   - Execução e aprovação com sucesso de toda a suíte de testes do projeto: **372 testes executados em 14 classes, 0 falhas, 0 erros, 0 ignorados** (`mvn test` com BUILD SUCCESS).
+   - Validações de fumaça fim a fim aprovadas com sucesso via `WFGStudy` em modo de recursos consolidados para WFG1 ($m=2$) e DTLZ2 ($m=5$).
+
+## Alterações 09/11/2026 - 17:35
+
+1. **Reversão da Migração e Restauração de Diretórios Legados como Somente Leitura**:
+   - **Contrato de Leitura Exclusiva**: Revertida integralmente a cópia física de arquivos de `MOEAD_Weights/` e `pareto_fronts/csv/` para `resources/weightVectorFiles/` e `resources/referenceFronts/`. Os diretórios legados `MOEAD_Weights/` e `pareto_fronts/csv/` permanecem estritamente intactos e são consumidos em modo somente leitura (*read-only*).
+   - **Limpeza de `resources/`**:
+     - `resources/weightVectorFiles/`: Contém exclusivamente as cópias oficiais do repositório jMetal 7.8 (29 arquivos `.dat`) e o gerado analiticamente `weights_gen/W3D_91.dat`.
+     - `resources/referenceFronts/`: Contém exclusivamente a subpasta `pf_gen/` com as frentes analíticas de DTLZ em alta dimensão ($m \in \{5, 8, 10, 15\}$), geradas pelo código matemático do projeto (`ParetoFrontValidator`), sem duplicações de arquivos de `pareto_fronts/csv/`.
+2. **Reversão e Ajustes no Pipeline Principal `WFGStudy.java`**:
+   - Restaurados os diretórios padrão de execução: `DEFAULT_WEIGHTS_DIRECTORY = "MOEAD_Weights"` e `DEFAULT_REFERENCE_FRONT_DIRECTORY = "pareto_fronts/csv"`.
+   - Preservada a geração sob demanda de frentes analíticas de DTLZ para $m > 3$ via `ParetoFrontValidator.generateAndSaveAnalyticalDtlzFront` gravando em `resources/referenceFronts/pf_gen/` e referenciadas dinamicamente via caminho relativo a partir de `pareto_fronts/csv`.
+3. **Resolução Canônica de Recursos (`ArtifactResolver.java` e Testes)**:
+   - Removidas as políticas de consolidação física que mesclavam pastas legadas em `resources/`. O resolver opera com auditoria de 114 manifestos canônicos ativos.
+   - Atualizados [`ArtifactResolverTest.java`](src/test/java/br/usp/lti/newmoea/util/ArtifactResolverTest.java) e [`WFGStudyPreflightTest.java`](src/test/java/br/usp/lti/newmoea/study/WFGStudyPreflightTest.java) validando a consistência dos caminhos e a integridade de preflight.
+4. **Validação e Homologação dos Testes**:
+   - Suíte de testes unitários e de integração aprovada sem falhas nem erros.
+   - Testes de fumaça ponta a ponta (`-Druns=1`) aprovados com sucesso para WFG1 ($m=2$) e DTLZ2 ($m=5$, com geração analítica da frente).
+
+## Alterações 09/11/2026 - 23:00
+
+1. **Auditoria Forense e Sincronização de Recursos do jMetal 7.8 e Versão Recente (7.11)**:
+   - **Frentes de Pareto em CSV (`resources/referenceFronts/`)**: Copiadas as 365 frentes de Pareto oficiais em formato CSV diretamente de `jMetal/resources/referenceFrontsCSV/` para `resources/referenceFronts/`, garantindo cobertura nativa oficial de WFG1–9 ($m \in \{2, 3, 5, 8, 10, 15\}$), DTLZ1–7 ($m \in \{2, 3, 4, 6, 8\}$), ZDT1–6, UF1–10, CF1–16, ZCAT1–20, etc., preservando integralmente o subdiretório `pf_gen/` com as frentes analíticas de alta dimensão.
+   - **Vetores de Pesos (`resources/weightVectorFiles/`)**: Preservados os 29 arquivos oficiais distribuídos pelo Git do jMetal 7.8/7.11 e adicionada a pasta `resources/weightVectorFiles/mombi2/` (20 itens) para suporte ao MOMBI2.
+   - **Recursos Complementares do jMetal Copiados**: Sincronizadas as pastas `REnadirandidealpoints/` (64 arquivos para problemas com restrições RE21–RE91), `referenceFrontsRSG/` (86 arquivos), `referenceFrontsTSP/` (4 arquivos), `tspInstances/` (9 arquivos), `mokpInstances/` (47 arquivos), `ebes/` (5 arquivos), `fapInstances/` (1 arquivo) e `unitTestsData/` (5 arquivos).
+2. **Diagnóstico da Hierarquia de Resolução (`pasta -> subpasta_gen -> gerar e salvar em **_gen`)**:
+   - Mapeado o comportamento atual do código: `WFGStudy.java` ainda utiliza caminhos padrão legados (`MOEAD_Weights` e `pareto_fronts/csv`) e acoplamento frágil com `relativize` para DTLZ $m > 3$.
+   - Diagnosticada a necessidade de unificação do fluxo no pipeline para seguir nativamente a precedência: (1) pasta raiz em `resources/`, (2) subpasta `_gen/` equivalente, (3) geração matemática sob demanda gravando em `**_gen`.
+
+## Alterações 09/11/2026 - 23:55
+
+1. **Prioridade Canônica de 3 Níveis das Frentes de Pareto de Referência**:
+   - Implementada e validada em [`ParetoFrontValidator.java`](src/main/java/br/usp/lti/newmoea/util/ParetoFrontValidator.java), [`ArtifactResolver.java`](src/main/java/br/usp/lti/newmoea/util/ArtifactResolver.java) e [`WFGStudy.java`](src/main/java/br/usp/lti/newmoea/study/WFGStudy.java) a hierarquia estrita:
+     1. `resources/referenceFronts/{PROBLEM}.{m}D.csv` (fonte canônica prioritária);
+     2. `resources/referenceFronts/pf_gen/{PROBLEM}.{m}D.csv` (frentes analíticas puras complementares para dimensões não distribuídas oficialmente);
+     3. Geração matemática sob demanda em `resources/referenceFronts/pf_gen/`, acionada **exclusivamente** quando o recurso estiver ausente nas fontes anteriores, prevenindo regenerações desnecessárias de frentes já existentes.
+   - Eliminado qualquer acoplamento frágil com `relativize` (`../../`), fornecendo caminhos limpos relativos ao diretório configurado.
+
+2. **Auditoria e Limpeza Forense dos Recursos em `resources/`**:
+   - Removidos 9 diretórios de benchmarks e algoritmos comprovadamente fora do escopo do projeto (otimização multiobjetivo contínua sobre WFG e DTLZ): `resources/ebes/`, `resources/fapInstances/`, `resources/mokpInstances/`, `resources/referenceFrontsRSG/`, `resources/referenceFrontsTSP/`, `resources/REnadirandidealpoints/`, `resources/tspInstances/`, `resources/unitTestsData/` e `resources/weightVectorFiles/mombi2/`.
+   - Removidos 273 arquivos CSV de problemas fora do escopo em `resources/referenceFronts/` (ZDT1–6, UF1–10, CF1–16, ZCAT1–20, MaF01–15, LZ09, LIRCMOP, LSMOP, RE, RWA, TSP, problemas de engenharia pontuais, etc.).
+   - Preservados integralmente os recursos relevantes para o escopo:
+     - As 92 frentes de referência oficiais de WFG1–9 e DTLZ1–7 em `resources/referenceFronts/`;
+     - Os 29 arquivos oficiais de vetores de peso do jMetal 7.8 em `resources/weightVectorFiles/` e a subpasta `weights_gen/`;
+     - Os pontos e direções de referência dos algoritmos do escopo em `resources/referencePoints/` (`nsgaiii` e `rvea`).
+
+3. **Separação Estrita entre `pf_gen/` e `pf_lowzero_gen/` (Variantes com Substituição de Zero)**:
+   - `resources/referenceFronts/pf_gen/`: reservado **exclusivamente** para frentes analíticas sem substituição de coordenadas zero (zeros matematicamente puros do simplex).
+   - `resources/referenceFronts/pf_lowzero_gen/`: criado e reservado **exclusivamente** para variantes de frentes com coordenadas zero substituídas por $\epsilon = 1.0 \times 10^{-5}$ (`applyZeroReplacement`, `generateAndSaveLowZeroDtlzFront` e `createLowZeroVariantFromFile`).
+   - Propriedade JVM configurável `-DreplaceZeroFronts=true` (desativada por padrão).
+
+4. **Atualização do Pipeline Experimental `WFGStudy.java`**:
+   - Atualizados os diretórios padrão de execução: `DEFAULT_REFERENCE_FRONT_DIRECTORY = "resources/referenceFronts"` e `DEFAULT_WEIGHTS_DIRECTORY = "resources/weightVectorFiles"`.
+   - `resolveReferenceFrontForStudy` e `resolveMoeadDataDirectory` garantem resolução canônica em 3 níveis e compatibilidade com todas as 6 dimensões ativas ($m \in \{2, 3, 5, 8, 10, 15\}$).
+
+5. **Evidências e Homologação de Testes**:
+   - Criada a suíte de testes [`ReferenceFrontCanonicalPriorityTest.java`](src/test/java/br/usp/lti/newmoea/qualityindicator/ReferenceFrontCanonicalPriorityTest.java) (6 testes, 100% aprovados).
+   - Executada a suíte de testes completa do projeto via `mvn test`: **378 testes executados, 0 falhas, 0 erros** (BUILD SUCCESS).
 
 ## 8. Atividades Reservadas para a Próxima Etapa
 Conforme definido no planejamento:

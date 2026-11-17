@@ -31,7 +31,7 @@ Não existe nenhuma tarefa `tasks/task*.md` que mande copiar frentes oficiais pa
 - `pareto_fronts/csv/` tem 160 CSVs, todos do commit inicial `6a6ecc2` (sem alterações posteriores).
 - Comparei por hash SHA-256 com `jMetal/resources/referenceFrontsCSV/`: 159 dos 160 arquivos são idênticos. A única diferença é `ConstrEx.csv`, que não é usado no experimento.
 - Portanto o conteúdo de `pareto_fronts/csv/` é, na prática, a cópia oficial do jMetal. O problema é o **local**, não o conteúdo.
-- `resources/referenceFronts/` contém apenas `pf_gen/analytical/`, vazio (geração desligada por padrão). Não há cópia oficial de frentes em `resources/`.
+- `resources/referenceFronts/` contém apenas `pf_gen/`, vazio (geração desligada por padrão). Não há cópia oficial de frentes em `resources/`.
 
 ## 3. Justificativa científica?
 Não encontrei nenhuma. Os documentos só afirmam que as frentes são idênticas ao jMetal (verdadeiro) e que não se deve alterar artefatos históricos sem evidência (regra de preservação). Isso justifica **não sobrescrever** `pareto_fronts/csv/`, mas não justifica que ele seja a fonte oficial ativa. Copiar para `resources/` e apontar o pipeline para a cópia seria compatível com a regra de preservação.

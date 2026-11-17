@@ -86,7 +86,7 @@ Todas as verificações de compilação (`mvn clean compile`), execução integr
    - Equações analíticas validadas para `DTLZ1` ($\sum f_j = 0.5$, erro $0.0$), `DTLZ2–4` ($\sum f_j^2 = 1$, erro $\le 1.39 \times 10^{-6}$), `DTLZ5–6` (curva 1D degenerada com $f_1 = f_2$ e $\sum f_j^2 = 1$, erro $\le 6.66 \times 10^{-16}$), `DTLZ7` ($2^{m-1}$ regiões desconexas com $f_m \in [f_m^{\min}(m), 2m]$, erro $\le 4.98 \times 10^{-6}$) e `WFG4–9` ($\sum (f_j / (2j))^2 = 1$, erro $\le 7.83 \times 10^{-6}$).
    - Documentadas as características originais dos arquivos do jMetal: duplicatas exatas em `DTLZ1.3D.csv` ($99$), `DTLZ5.3D.csv` ($166.167$ duplicatas, $333$ únicos) e `DTLZ6.3D.csv` ($27.860$ duplicatas, $140$ únicos); $109$ pontos dominados em `DTLZ7.3D.csv`; e $f_2 \in [-2, 4]$ em `WFG3.2D.csv`.
 3. **Geração Analítica e Empírica Opcional para `DTLZ1–DTLZ7` ($m > 3$)**:
-   - Implementada a geração matemática exata (`-DgenerateAllReferenceFronts=false`, desativada por padrão) em `resources/referenceFronts/pf_gen/analytical/` e a consolidação empírica não-dominada com arquivo `.meta.txt` e guarda anti-vazamento (`-DgenerateEmpiricalReferenceFronts=false`, desativada por padrão) em `resources/referenceFronts/pf_gen/empirical/`.
+   - Implementada a geração matemática exata (`-DgenerateAllReferenceFronts=false`, desativada por padrão) em `resources/referenceFronts/pf_gen/` e a consolidação empírica não-dominada com arquivo `.meta.txt` e guarda anti-vazamento (`-DgenerateEmpiricalReferenceFronts=false`, desativada por padrão) em `resources/referenceFronts/pf_gen/empirical/`.
 
 ---
 
@@ -315,7 +315,7 @@ Todas as 6 opções experimentais introduzidas na Fase 2 permanecem estritamente
 |---|:---:|---|---|
 | `-DpersistReferencePoints` | `false` | `ReferenceSetValidator.isPersistReferencePointsEnabled()` | Não grava arquivos em `resources/referencePoints/nsgaiii/` |
 | `-DpersistReferenceDirections` | `false` | `ReferenceSetValidator.isPersistReferenceDirectionsEnabled()` | Não grava arquivos em `resources/referencePoints/rvea/` |
-| `-DgenerateAllReferenceFronts` | `false` | `ParetoFrontValidator.isGenerateAllReferenceFrontsEnabled()` | Mantém DTLZ habilitado apenas para $m \le 3$ em `WFGStudy` e não gera arquivos em `resources/referenceFronts/pf_gen/analytical/` |
+| `-DgenerateAllReferenceFronts` | `false` | `ParetoFrontValidator.isGenerateAllReferenceFrontsEnabled()` | Mantém DTLZ habilitado apenas para $m \le 3$ em `WFGStudy` e não gera arquivos em `resources/referenceFronts/pf_gen/` |
 | `-DgenerateEmpiricalReferenceFronts` | `false` | `ParetoFrontValidator.isGenerateEmpiricalReferenceFrontsEnabled()` | Não gera frentes empíricas em `resources/referenceFronts/pf_gen/empirical/` |
 | `-DreplaceZeroWeights` | `false` | `ReferenceSetValidator.isReplaceZeroWeightsEnabled()` | Não gera arquivos derivados em `resources/weightVectorFiles/weights_gen/` |
 | `-DprofilePerformance` | `false` | `PerformanceProfiler.isProfilePerformanceEnabled()` | Não executa a bateria de benchmark ao final de `WFGStudy.main` |

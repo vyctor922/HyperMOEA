@@ -1,5 +1,6 @@
 package br.usp.lti.newmoea.util;
 
+import br.usp.lti.newmoea.study.StaticParams;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -476,13 +477,27 @@ public final class ParetoFrontValidator {
     public static final String GENERATE_EMPIRICAL_REFERENCE_FRONTS_PROPERTY =
             "generateEmpiricalReferenceFronts";
 
+    /** Diretório canônico principal de frentes de Pareto de referência oficiais ({@code resources/referenceFronts/}). */
+    public static final Path DEFAULT_CANONICAL_REFERENCE_FRONTS_DIR =
+            Path.of("resources", "referenceFronts");
+
     /** Diretório padrão de saída para frentes analíticas derivadas em T07 (nunca escreve em {@code pareto_fronts/csv/}). */
     public static final Path DEFAULT_ANALYTICAL_PF_GEN_DIR =
-            Path.of("resources", "referenceFronts", "pf_gen", "analytical");
+            Path.of("resources", "referenceFronts", "pf_gen");
 
     /** Diretório padrão de saída para frentes empíricas derivadas em T07 (nunca escreve em {@code pareto_fronts/csv/}). */
     public static final Path DEFAULT_EMPIRICAL_PF_GEN_DIR =
             Path.of("resources", "referenceFronts", "pf_gen", "empirical");
+
+    /** Nome da propriedade JVM para habilitar variantes com substituição de valores zero em frentes de Pareto (desativada por padrão). */
+    public static final String REPLACE_ZERO_FRONTS_PROPERTY = "replaceZeroFronts";
+
+    /** Valor padrão substituto para coordenadas zero em frentes de Pareto (1.0e-5). */
+    public static final double DEFAULT_ZERO_FRONT_REPLACEMENT = 1.0e-5;
+
+    /** Diretório padrão exclusivo para variantes de frentes de Pareto com substituição de zeros ({@code resources/referenceFronts/pf_lowzero_gen/}). */
+    public static final Path DEFAULT_LOWZERO_PF_GEN_DIR =
+            Path.of("resources", "referenceFronts", "pf_lowzero_gen");
 
     /** Limite superior de \(f_j\) no primeiro componente desconexo de DTLZ7 (\(x_1^* \approx 0.251411836088917\)). */
     public static final double DTLZ7_INTERVAL_1_MAX = 0.251411836088917;
@@ -519,9 +534,52 @@ public final class ParetoFrontValidator {
     }
 
     /**
+     * Verifica se a geração/utilização de variantes com substituição de valores zero em frentes de
+     * referência está habilitada via propriedade JVM {@code -DreplaceZeroFronts=true}.
+     * Desativada ({@code false}) por padrão.
+     *
+     * @return {@code true} se habilitada, {@code false} por padrão
+     */
+    public static boolean isReplaceZeroFrontsEnabled() {
+        return Boolean.parseBoolean(
+                System.getProperty(REPLACE_ZERO_FRONTS_PROPERTY, "false"));
+    }
+
+    /**
+     * Aplica de forma controlada a substituição de coordenadas zero ({@code 0.0 -> zeroReplacement})
+     * em todos os pontos de uma frente de Pareto.
+     *
+     * @param front matriz de pontos da frente
+     * @param zeroReplacement valor positivo substituto para coordenadas zero (ex.: {@code 1.0e-5})
+     * @return nova matriz de pontos com a substituição estrita aplicada
+     */
+    public static double[][] applyZeroReplacement(double[][] front, double zeroReplacement) {
+        if (front == null) {
+            throw new IllegalArgumentException("A matriz da frente não pode ser nula.");
+        }
+        if (!Double.isFinite(zeroReplacement) || zeroReplacement <= 0.0) {
+            throw new IllegalArgumentException(
+                    "O valor de substituição de zeros deve ser finito e estritamente positivo: "
+                            + zeroReplacement);
+        }
+        double[][] result = new double[front.length][];
+        for (int i = 0; i < front.length; i++) {
+            result[i] = new double[front[i].length];
+            for (int j = 0; j < front[i].length; j++) {
+                result[i][j] = (front[i][j] == 0.0) ? zeroReplacement : front[i][j];
+            }
+        }
+        return result;
+    }
+
+    /**
      * Conta o número de pontos dominados em uma matriz de objetivos sob convenção de minimização:
      * \(\mathbf{u}\) domina \(\mathbf{v}\) sse \(\forall j, u_j \le v_j + \text{tol}\) e
      * \(\exists j, u_j < v_j - \text{tol}\).
+     *
+     * <p>Para frentes com alta multiplicidade de linhas idênticas (como {@code DTLZ5.3D.csv} com
+     * 166.500 linhas e 333 únicos), extrai primeiro os pontos representantes únicos exatos, reduzindo
+     * o custo de \(O(N^2)\) para \(O(N \cdot U)\) com resultado matematicamente idêntico.
      *
      * @param front matriz de pontos (\(\text{N} \times m\))
      * @param tolerance tolerância numérica para comparação de dominância
@@ -530,15 +588,59 @@ public final class ParetoFrontValidator {
     public static int countDominatedPoints(double[][] front, double tolerance) {
         validateNonEmptyMatrix(front);
         int n = front.length;
+        if (n <= 2000) {
+            int dominatedCount = 0;
+            for (int i = 0; i < n; i++) {
+                double[] candidate = front[i];
+                boolean dominated = false;
+                for (int k = 0; k < n; k++) {
+                    if (i == k) {
+                        continue;
+                    }
+                    if (dominates(front[k], candidate, tolerance)) {
+                        dominated = true;
+                        break;
+                    }
+                }
+                if (dominated) {
+                    dominatedCount++;
+                }
+            }
+            return dominatedCount;
+        }
+
+        // Extrai representantes com coordenadas exatamente distintas para preservar 100% da semântica
+        List<double[]> exactUnique = new ArrayList<>();
+        java.util.Map<Long, List<double[]>> exactBuckets = new java.util.HashMap<>();
+        for (double[] pt : front) {
+            long h = Arrays.hashCode(pt);
+            List<double[]> bucket = exactBuckets.get(h);
+            boolean found = false;
+            if (bucket != null) {
+                for (double[] u : bucket) {
+                    if (Arrays.equals(pt, u)) {
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if (!found) {
+                exactUnique.add(pt);
+                exactBuckets.computeIfAbsent(h, k -> new ArrayList<>()).add(pt);
+            }
+        }
+
+        int uSize = exactUnique.size();
         int dominatedCount = 0;
         for (int i = 0; i < n; i++) {
             double[] candidate = front[i];
             boolean dominated = false;
-            for (int k = 0; k < n; k++) {
-                if (i == k) {
+            for (int k = 0; k < uSize; k++) {
+                double[] rep = exactUnique.get(k);
+                if (candidate == rep) {
                     continue;
                 }
-                if (dominates(front[k], candidate, tolerance)) {
+                if (dominates(rep, candidate, tolerance)) {
                     dominated = true;
                     break;
                 }
@@ -959,8 +1061,9 @@ public final class ParetoFrontValidator {
             double[] current = new double[d];
             buildDtlz7CartesianRecursive(m, 0, axisValues, current, points);
         } else {
-            // Para m >= 5 (2^(m-1) >= 16 componentes), combina os extremos canônicos e pontos
-            // estratificados de baixa discrepância (Halton) sobre os componentes desconexos
+            // Para m >= 5 (2^(m-1) >= 16 componentes), combina os extremos canônicos, vértices de
+            // fronteira por eixo e pontos estratificados de baixa discrepância (Halton) sobre os
+            // componentes desconexos
             double[] minCorner = new double[m];
             Arrays.fill(minCorner, 0.0);
             minCorner[m - 1] = evaluateDtlz7LastObjective(minCorner, m);
@@ -973,9 +1076,24 @@ public final class ParetoFrontValidator {
             maxPsiCorner[m - 1] = evaluateDtlz7LastObjective(maxPsiCorner, m);
             points.add(maxPsiCorner);
 
+            // Vértices de fronteira por eixo (garantem cobertura explícita de 0, x_1*, x_jump e x_3*
+            // em cada coordenada j = 0, ..., m - 2)
+            double[] boundaryCoords = {
+                DTLZ7_INTERVAL_1_MAX, DTLZ7_INTERVAL_2_MIN, DTLZ7_INTERVAL_2_MAX
+            };
+            for (int j = 0; j < d; j++) {
+                for (double bVal : boundaryCoords) {
+                    double[] axisPt = new double[m];
+                    axisPt[j] = bVal;
+                    axisPt[m - 1] = evaluateDtlz7LastObjective(axisPt, m);
+                    points.add(axisPt);
+                }
+            }
+
+            int remaining = Math.max(0, targetPoints - points.size());
             int totalComponents = 1 << Math.min(d, 14);
             int[] primes = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47};
-            for (int idx = 0; idx < targetPoints - 2; idx++) {
+            for (int idx = 0; idx < remaining; idx++) {
                 int compMask = (int) (((long) idx * 2654435761L) & (totalComponents - 1));
                 double[] pt = new double[m];
                 for (int j = 0; j < d; j++) {
@@ -1054,7 +1172,7 @@ public final class ParetoFrontValidator {
 
     /**
      * Gera e persiste uma frente analítica validada para um problema DTLZ em {@code outputDir}
-     * (ex.: {@code resources/referenceFronts/pf_gen/analytical/DTLZ1.5D.csv}) sem jamais modificar
+     * (ex.: {@code resources/referenceFronts/pf_gen/DTLZ1.5D.csv}) sem jamais modificar
      * ou sobrescrever {@code pareto_fronts/csv/}.
      *
      * @param problemName nome do problema ({@code "DTLZ1"} a {@code "DTLZ7"})
@@ -1086,6 +1204,158 @@ public final class ParetoFrontValidator {
         FrontValidationSummary summary = validateParetoFrontFile(targetFile, m);
         validateAnalyticalDtlzFrontByProblem(normalized, summary.points(), 1e-5);
         return new GeneratedFrontReport(targetFile, null, "ANALYTICAL", true, true, summary);
+    }
+
+    /**
+     * Gera e persiste uma variante de frente analítica com substituição de coordenadas zero ({@code 0.0 -> zeroReplacement})
+     * em {@code outputDir} (padrão {@code resources/referenceFronts/pf_lowzero_gen/}), assegurando que a pasta
+     * {@code pf_gen/} permaneça reservada exclusivamente para frentes canônicas puras.
+     *
+     * @param problemName nome do problema ({@code "DTLZ1"} a {@code "DTLZ7"})
+     * @param m número de objetivos
+     * @param outerDivisions divisões externas H1
+     * @param innerDivisions divisões internas H2
+     * @param zeroReplacement valor positivo substituto para coordenadas zero (ex.: {@code 1.0e-5})
+     * @param outputDir diretório de saída (ex.: {@code resources/referenceFronts/pf_lowzero_gen/})
+     * @param enabled se falso, não grava arquivos
+     * @return {@link GeneratedFrontReport}
+     */
+    public static GeneratedFrontReport generateAndSaveLowZeroDtlzFront(
+            String problemName,
+            int m,
+            int outerDivisions,
+            int innerDivisions,
+            double zeroReplacement,
+            Path outputDir,
+            boolean enabled) {
+        if (!enabled) {
+            return new GeneratedFrontReport(null, null, "LOWZERO_ANALYTICAL", false, false, null);
+        }
+        assertNotProtectedParetoFrontsDir(outputDir);
+        String normalized = problemName.trim().toUpperCase(java.util.Locale.ROOT);
+        if (normalized.contains("_")) {
+            normalized = normalized.substring(0, normalized.indexOf('_'));
+        }
+        double[][] baseFront = generateAnalyticalDtlzFront(normalized, m, outerDivisions, innerDivisions);
+        double[][] lowZeroFront = applyZeroReplacement(baseFront, zeroReplacement);
+        String fileName = String.format("%s.%dD.csv", normalized, m);
+        Path targetFile = writeFrontCsvWithoutOverwrite(outputDir, fileName, lowZeroFront);
+        FrontValidationSummary summary = validateParetoFrontFile(targetFile, m);
+        return new GeneratedFrontReport(targetFile, null, "LOWZERO_ANALYTICAL", true, true, summary);
+    }
+
+    /**
+     * Cria uma variante com substituição de coordenadas zero a partir de um arquivo CSV de frente existente,
+     * persistindo-a exclusivamente no diretório de variantes com zero ({@code pf_lowzero_gen/}).
+     *
+     * @param sourceFrontFile arquivo de frente original
+     * @param outputDir diretório de destino (ex.: {@code resources/referenceFronts/pf_lowzero_gen/})
+     * @param zeroReplacement valor substituto para coordenadas zero
+     * @param m número de objetivos
+     * @param enabled se falso, não grava arquivos
+     * @return {@link GeneratedFrontReport}
+     */
+    public static GeneratedFrontReport createLowZeroVariantFromFile(
+            Path sourceFrontFile,
+            Path outputDir,
+            double zeroReplacement,
+            int m,
+            boolean enabled) {
+        if (!enabled) {
+            return new GeneratedFrontReport(null, null, "LOWZERO_VARIANT", false, false, null);
+        }
+        assertNotProtectedParetoFrontsDir(outputDir);
+        if (sourceFrontFile == null || !Files.isRegularFile(sourceFrontFile)) {
+            throw new IllegalArgumentException("Arquivo de origem inexistente: " + sourceFrontFile);
+        }
+        FrontValidationSummary sourceSummary = validateParetoFrontFile(sourceFrontFile, m);
+        double[][] lowZeroFront = applyZeroReplacement(sourceSummary.points(), zeroReplacement);
+        String fileName = sourceFrontFile.getFileName().toString();
+        Path targetFile = writeFrontCsvWithoutOverwrite(outputDir, fileName, lowZeroFront);
+        FrontValidationSummary summary = validateParetoFrontFile(targetFile, m);
+        return new GeneratedFrontReport(targetFile, null, "LOWZERO_VARIANT", true, true, summary);
+    }
+
+    /**
+     * Resolve a frente de Pareto de referência seguindo rigorosamente a ordem canônica:
+     * <ol>
+     *   <li>{@code resources/referenceFronts/} (ou {@code pf_lowzero_gen/} se variante de zero solicitada e já gerada);</li>
+     *   <li>{@code resources/referenceFronts/pf_gen/} (frentes geradas sem substituição de zeros para complementar a fonte oficial);</li>
+     *   <li>Geração por código (DTLZ), gravando em {@code pf_gen/} ou {@code pf_lowzero_gen/}, somente quando o recurso estiver ausente nas anteriores.</li>
+     * </ol>
+     *
+     * @param problemName identificador do problema (ex.: {@code "WFG1"}, {@code "DTLZ2"})
+     * @param m número de objetivos (\(m \ge 2\))
+     * @param canonicalBaseDir diretório canônico base ({@code resources/referenceFronts/})
+     * @param pfGenDir diretório de frentes geradas puras ({@code resources/referenceFronts/pf_gen/})
+     * @param pfLowZeroDir diretório exclusivo de variantes com zero ({@code resources/referenceFronts/pf_lowzero_gen/})
+     * @param useLowZero se verdadeiro, resolve a variante com substituição de coordenadas zero
+     * @param allowOnDemandGeneration se verdadeiro, permite gerar por código se ausente em disco
+     * @return caminho {@link Path} do arquivo de frente resolvido
+     */
+    public static Path resolveCanonicalReferenceFront(
+            String problemName,
+            int m,
+            Path canonicalBaseDir,
+            Path pfGenDir,
+            Path pfLowZeroDir,
+            boolean useLowZero,
+            boolean allowOnDemandGeneration) {
+        if (m < 2) {
+            throw new IllegalArgumentException("O número de objetivos m deve ser >= 2, mas foi: " + m);
+        }
+        String canonicalProblem = StaticParams.normalizeProblemId(problemName);
+        String fileName = String.format("%s.%dD.csv", canonicalProblem, m);
+        boolean isDtlz = canonicalProblem.startsWith("DTLZ");
+
+        Path targetPfLowZeroDir = pfLowZeroDir != null ? pfLowZeroDir : DEFAULT_LOWZERO_PF_GEN_DIR;
+        Path targetPfGenDir = pfGenDir != null ? pfGenDir : DEFAULT_ANALYTICAL_PF_GEN_DIR;
+        Path targetCanonicalDir = canonicalBaseDir != null ? canonicalBaseDir : DEFAULT_CANONICAL_REFERENCE_FRONTS_DIR;
+
+        if (useLowZero) {
+            Path lowZeroFile = targetPfLowZeroDir.resolve(fileName);
+            if (Files.isRegularFile(lowZeroFile)) {
+                return lowZeroFile;
+            }
+            // Não existe em pf_lowzero_gen: resolve o canônico (1 -> 2 -> 3) e deriva a variante
+            Path baseCanonical = resolveCanonicalReferenceFront(
+                    problemName, m, targetCanonicalDir, targetPfGenDir, targetPfLowZeroDir, false, allowOnDemandGeneration);
+            GeneratedFrontReport rep = createLowZeroVariantFromFile(
+                    baseCanonical, targetPfLowZeroDir, DEFAULT_ZERO_FRONT_REPLACEMENT, m, true);
+            return rep.outputFile();
+        }
+
+        // 1. resources/referenceFronts/
+        Path canonicalFile = targetCanonicalDir.resolve(fileName);
+        if (Files.isRegularFile(canonicalFile)) {
+            return canonicalFile;
+        }
+
+        // 2. resources/referenceFronts/pf_gen/
+        Path pfGenFile = targetPfGenDir.resolve(fileName);
+        if (Files.isRegularFile(pfGenFile)) {
+            return pfGenFile;
+        }
+
+        // 3. Geração por código somente quando ausente nas fontes anteriores
+        if (isDtlz && allowOnDemandGeneration) {
+            int h1 = StaticParams.getOuterDivisions(m);
+            int h2 = StaticParams.getInnerDivisions(m);
+            GeneratedFrontReport report = generateAndSaveAnalyticalDtlzFront(
+                    canonicalProblem, m, h1, h2, targetPfGenDir, true);
+            return report.outputFile();
+        }
+
+        // Fallback legado em pareto_fronts/csv/ caso exista
+        Path legacyFile = Path.of("pareto_fronts", "csv", fileName);
+        if (Files.isRegularFile(legacyFile)) {
+            return legacyFile;
+        }
+
+        throw new IllegalArgumentException(
+                String.format(
+                        "Frente de Pareto não encontrada na hierarquia canônica (1: %s, 2: %s, 3: geração por código) para problema=%s, m=%d.",
+                        targetCanonicalDir, targetPfGenDir, canonicalProblem, m));
     }
 
     /**
@@ -1246,5 +1516,430 @@ public final class ParetoFrontValidator {
             throw new IllegalStateException(
                     "Falha ao gravar frente derivada em: " + outputDir, e);
         }
+    }
+
+    // =========================================================================
+    // EXTENSÕES T16: Auditoria Física Completa e Realizabilidade Matemática
+    // =========================================================================
+
+    /**
+     * Registro da auditoria física e de dominância de um arquivo em {@code pareto_fronts/csv/}.
+     *
+     * @param fileName nome do arquivo (ex.: {@code "WFG1.2D.csv"})
+     * @param family família do problema inferida do nome (ex.: {@code "WFG"}, {@code "DTLZ"})
+     * @param problem nome do problema inferido (ex.: {@code "WFG1"}, {@code "DTLZ7"})
+     * @param m dimensionalidade observada nos pontos válidos (ou inferida do nome quando vazio)
+     * @param sizeBytes tamanho físico do arquivo em bytes
+     * @param sha256 hash SHA-256 hexadecimal em minúsculas
+     * @param physicalLines número total de linhas físicas no arquivo
+     * @param nonEmptyLines número de linhas não-vazias após {@code trim()}
+     * @param validPoints número de pontos numéricos finitos válidos
+     * @param uniquePoints número de pontos distintos segundo a tolerância {@code 1e-9}
+     * @param nonDominatedPoints número de pontos válidos não-dominados ({@code validPoints - dominatedPoints})
+     * @param duplicatedPoints número de pontos duplicados ({@code validPoints - uniquePoints})
+     * @param dominatedPoints número de pontos válidos dominados por ao menos outro ponto do arquivo
+     * @param minByObj vetor com o valor mínimo por objetivo (vazio se {@code validPoints == 0})
+     * @param maxByObj vetor com o valor máximo por objetivo (vazio se {@code validPoints == 0})
+     * @param hasNegativeValues {@code true} se houver ao menos uma coordenada estritamente negativa
+     */
+    public record PhysicalFrontAuditRow(
+            String fileName,
+            String family,
+            String problem,
+            int m,
+            long sizeBytes,
+            String sha256,
+            int physicalLines,
+            int nonEmptyLines,
+            int validPoints,
+            int uniquePoints,
+            int nonDominatedPoints,
+            int duplicatedPoints,
+            int dominatedPoints,
+            double[] minByObj,
+            double[] maxByObj,
+            boolean hasNegativeValues) {
+
+        /** Formata a linha para exportação no CSV de auditoria física ({@code reference-fronts-physical.csv}). */
+        public String toCsvRow() {
+            return String.format(
+                    java.util.Locale.US,
+                    "%s,%s,%s,%d,%d,%s,%d,%d,%d,%d,%d,%d,%d,\"%s\",\"%s\",%b",
+                    fileName,
+                    family,
+                    problem,
+                    m,
+                    sizeBytes,
+                    sha256,
+                    physicalLines,
+                    nonEmptyLines,
+                    validPoints,
+                    uniquePoints,
+                    nonDominatedPoints,
+                    duplicatedPoints,
+                    dominatedPoints,
+                    formatVector(minByObj),
+                    formatVector(maxByObj),
+                    hasNegativeValues);
+        }
+
+        private static String formatVector(double[] vec) {
+            if (vec == null || vec.length == 0) {
+                return "";
+            }
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < vec.length; i++) {
+                if (i > 0) {
+                    sb.append("; ");
+                }
+                sb.append(String.format(java.util.Locale.US, "%.6g", vec[i]));
+            }
+            sb.append(']');
+            return sb.toString();
+        }
+    }
+
+    /**
+     * Executa a auditoria física e de dominância de um arquivo CSV de frente de referência,
+     * suportando inclusive arquivos legados vazios ou com separador de vírgula dupla ({@code LZ09}).
+     *
+     * @param csvFile caminho para o arquivo CSV
+     * @return {@link PhysicalFrontAuditRow} com todas as métricas físicas e de dominância
+     */
+    public static PhysicalFrontAuditRow auditPhysicalFrontFile(Path csvFile) {
+        if (csvFile == null || !Files.exists(csvFile) || !Files.isRegularFile(csvFile)) {
+            throw new IllegalArgumentException("Arquivo inexistente ou inválido: " + csvFile);
+        }
+        String fileName = csvFile.getFileName().toString();
+        String problem = inferProblemName(fileName);
+        String family = inferFamilyName(problem);
+
+        byte[] rawBytes;
+        List<String> rawLines;
+        try {
+            rawBytes = Files.readAllBytes(csvFile);
+            rawLines = Files.readAllLines(csvFile, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalStateException("Falha ao ler arquivo para auditoria: " + csvFile, e);
+        }
+
+        long sizeBytes = rawBytes.length;
+        String sha256 = computeSha256Hex(rawBytes);
+        int physicalLines = rawLines.size();
+        int nonEmptyLines = 0;
+        List<double[]> parsedPoints = new ArrayList<>(physicalLines);
+        int detectedDim = -1;
+
+        for (String line : rawLines) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            nonEmptyLines++;
+            String[] tokens = trimmed.split(",+");
+            List<String> nonBlankTokens = new ArrayList<>(tokens.length);
+            for (String tok : tokens) {
+                String t = tok.trim();
+                if (!t.isEmpty()) {
+                    nonBlankTokens.add(t);
+                }
+            }
+            if (nonBlankTokens.isEmpty()) {
+                continue;
+            }
+            if (detectedDim == -1) {
+                detectedDim = nonBlankTokens.size();
+            } else if (nonBlankTokens.size() != detectedDim) {
+                continue;
+            }
+            double[] pt = new double[detectedDim];
+            boolean valid = true;
+            for (int j = 0; j < detectedDim; j++) {
+                try {
+                    double v = Double.parseDouble(nonBlankTokens.get(j));
+                    if (!Double.isFinite(v)) {
+                        valid = false;
+                        break;
+                    }
+                    pt[j] = v;
+                } catch (NumberFormatException ex) {
+                    valid = false;
+                    break;
+                }
+            }
+            if (valid) {
+                parsedPoints.add(pt);
+            }
+        }
+
+        int validPoints = parsedPoints.size();
+        if (validPoints == 0) {
+            int fallbackM = inferDimensionFromFileName(fileName);
+            return new PhysicalFrontAuditRow(
+                    fileName,
+                    family,
+                    problem,
+                    fallbackM,
+                    sizeBytes,
+                    sha256,
+                    physicalLines,
+                    nonEmptyLines,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    new double[0],
+                    new double[0],
+                    false);
+        }
+
+        double[][] front = parsedPoints.toArray(double[][]::new);
+        int m = detectedDim;
+        double[] minByObj = new double[m];
+        double[] maxByObj = new double[m];
+        Arrays.fill(minByObj, Double.POSITIVE_INFINITY);
+        Arrays.fill(maxByObj, Double.NEGATIVE_INFINITY);
+        boolean hasNegative = false;
+
+        for (double[] pt : front) {
+            for (int j = 0; j < m; j++) {
+                double v = pt[j];
+                if (v < minByObj[j]) {
+                    minByObj[j] = v;
+                }
+                if (v > maxByObj[j]) {
+                    maxByObj[j] = v;
+                }
+                if (v < 0.0) {
+                    hasNegative = true;
+                }
+            }
+        }
+
+        int uniquePoints = countUniquePoints(front, DEFAULT_DUPLICATE_TOLERANCE);
+        int duplicatedPoints = validPoints - uniquePoints;
+        int dominatedPoints =
+                (m >= 2) ? countDominatedPoints(front, DEFAULT_DUPLICATE_TOLERANCE) : 0;
+        int nonDominatedPoints = validPoints - dominatedPoints;
+
+        return new PhysicalFrontAuditRow(
+                fileName,
+                family,
+                problem,
+                m,
+                sizeBytes,
+                sha256,
+                physicalLines,
+                nonEmptyLines,
+                validPoints,
+                uniquePoints,
+                nonDominatedPoints,
+                duplicatedPoints,
+                dominatedPoints,
+                minByObj,
+                maxByObj,
+                hasNegative);
+    }
+
+    private static String inferProblemName(String fileName) {
+        String stem =
+                fileName.endsWith(".csv")
+                        ? fileName.substring(0, fileName.length() - 4)
+                        : fileName;
+        int dotIdx = stem.lastIndexOf('.');
+        if (dotIdx > 0) {
+            String suffix = stem.substring(dotIdx + 1);
+            if (suffix.endsWith("D")) {
+                return stem.substring(0, dotIdx);
+            }
+        }
+        return stem;
+    }
+
+    private static String inferFamilyName(String problem) {
+        if (problem.startsWith("WFG")) {
+            return "WFG";
+        }
+        if (problem.startsWith("DTLZ")) {
+            return "DTLZ";
+        }
+        if (problem.startsWith("ZDT")) {
+            return "ZDT";
+        }
+        if (problem.startsWith("LZ09")) {
+            return "LZ09";
+        }
+        if (problem.startsWith("UF")) {
+            return "UF";
+        }
+        if (problem.startsWith("CF")) {
+            return "CF";
+        }
+        if (problem.startsWith("MOP")) {
+            return "MOP";
+        }
+        if (problem.startsWith("GLT")) {
+            return "GLT";
+        }
+        if (problem.startsWith("LIRCMOP")) {
+            return "LIRCMOP";
+        }
+        if (problem.startsWith("DASCMOP")) {
+            return "DASCMOP";
+        }
+        return "OTHER";
+    }
+
+    private static int inferDimensionFromFileName(String fileName) {
+        String stem =
+                fileName.endsWith(".csv")
+                        ? fileName.substring(0, fileName.length() - 4)
+                        : fileName;
+        int dotIdx = stem.lastIndexOf('.');
+        if (dotIdx > 0) {
+            String suffix = stem.substring(dotIdx + 1);
+            if (suffix.endsWith("D") && suffix.length() > 1) {
+                try {
+                    return Integer.parseInt(suffix.substring(0, suffix.length() - 1));
+                } catch (NumberFormatException ignored) {
+                    return 0;
+                }
+            }
+        }
+        return 0;
+    }
+
+    private static String computeSha256Hex(byte[] bytes) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(bytes);
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b & 0xff));
+            }
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Algoritmo SHA-256 indisponível na JVM.", e);
+        }
+    }
+
+    /**
+     * Constrói explicitamente um vetor de decisão Pareto-ótimo \(\mathbf{x}^* \in [0, 1]^n\)
+     * (com \(g(\mathbf{x}_M^*) = 0\) para {@code DTLZ1}–{@code DTLZ6} e \(g(\mathbf{x}_M^*) = 1\)
+     * para {@code DTLZ7}) cuja imagem por {@code problem.evaluate(solution)} no jMetal 7.8
+     * reproduz o vetor de objetivos \(\mathbf{y} = (f_1, \dots, f_m)\) da frente analítica.
+     *
+     * @param problemName nome do problema ({@code "DTLZ1"} a {@code "DTLZ7"})
+     * @param targetObjectives ponto \(\mathbf{y} \in \mathbb{R}^m\) pertencente à frente analítica
+     * @param numberOfVariables número total de variáveis de decisão \(n = m + k - 1\)
+     * @return vetor de decisão ótimo \(\mathbf{x}^* \in [0, 1]^n\)
+     */
+    public static double[] constructOptimalDtlzDecisionVector(
+            String problemName, double[] targetObjectives, int numberOfVariables) {
+        if (targetObjectives == null || targetObjectives.length < 2) {
+            throw new IllegalArgumentException("O vetor de objetivos deve ter dimensão m >= 2.");
+        }
+        int m = targetObjectives.length;
+        if (numberOfVariables < m) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "O número de variáveis (%d) deve ser >= m (%d).",
+                            numberOfVariables, m));
+        }
+        String normalized = problemName.trim().toUpperCase(java.util.Locale.ROOT);
+        if (normalized.contains("_")) {
+            normalized = normalized.substring(0, normalized.indexOf('_'));
+        }
+
+        double[] x = new double[numberOfVariables];
+        int posVars = m - 1;
+
+        switch (normalized) {
+            case "DTLZ1" -> {
+                for (int i = posVars; i < numberOfVariables; i++) {
+                    x[i] = 0.5;
+                }
+                for (int i = 0; i < posVars; i++) {
+                    int k = m - 1 - i;
+                    double sumNum = 0.0;
+                    for (int r = 0; r < k; r++) {
+                        sumNum += targetObjectives[r];
+                    }
+                    double sumDen = sumNum + targetObjectives[k];
+                    x[i] = (sumDen <= 0.0) ? 0.0 : clamp01(sumNum / sumDen);
+                }
+            }
+            case "DTLZ2", "DTLZ3" -> {
+                for (int i = posVars; i < numberOfVariables; i++) {
+                    x[i] = 0.5;
+                }
+                for (int i = 0; i < posVars; i++) {
+                    int k = m - 1 - i;
+                    double prefixNormSq = 0.0;
+                    for (int r = 0; r < k; r++) {
+                        prefixNormSq += targetObjectives[r] * targetObjectives[r];
+                    }
+                    double theta = Math.atan2(targetObjectives[k], Math.sqrt(prefixNormSq));
+                    x[i] = clamp01(theta / (0.5 * Math.PI));
+                }
+            }
+            case "DTLZ4" -> {
+                for (int i = posVars; i < numberOfVariables; i++) {
+                    x[i] = 0.5;
+                }
+                double invAlpha = 1.0 / 100.0;
+                for (int i = 0; i < posVars; i++) {
+                    int k = m - 1 - i;
+                    double prefixNormSq = 0.0;
+                    for (int r = 0; r < k; r++) {
+                        prefixNormSq += targetObjectives[r] * targetObjectives[r];
+                    }
+                    double theta = Math.atan2(targetObjectives[k], Math.sqrt(prefixNormSq));
+                    double base = clamp01(theta / (0.5 * Math.PI));
+                    x[i] = (base <= 0.0) ? 0.0 : Math.pow(base, invAlpha);
+                }
+            }
+            case "DTLZ5" -> {
+                for (int i = 1; i < numberOfVariables; i++) {
+                    x[i] = 0.5;
+                }
+                double fm = clamp01(targetObjectives[m - 1]);
+                x[0] = clamp01(Math.asin(fm) / (0.5 * Math.PI));
+            }
+            case "DTLZ6" -> {
+                for (int i = 1; i < posVars; i++) {
+                    x[i] = 0.5;
+                }
+                for (int i = posVars; i < numberOfVariables; i++) {
+                    x[i] = 0.0;
+                }
+                double fm = clamp01(targetObjectives[m - 1]);
+                x[0] = clamp01(Math.asin(fm) / (0.5 * Math.PI));
+            }
+            case "DTLZ7" -> {
+                for (int i = 0; i < posVars; i++) {
+                    x[i] = clamp01(targetObjectives[i]);
+                }
+                for (int i = posVars; i < numberOfVariables; i++) {
+                    x[i] = 0.0;
+                }
+            }
+            default ->
+                    throw new IllegalArgumentException(
+                            "Problema DTLZ não reconhecido para inversão no espaço de decisão: "
+                                    + problemName);
+        }
+        return x;
+    }
+
+    private static double clamp01(double v) {
+        if (v < 0.0) {
+            return 0.0;
+        }
+        if (v > 1.0) {
+            return 1.0;
+        }
+        return v;
     }
 }

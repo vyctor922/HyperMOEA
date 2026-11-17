@@ -3,13 +3,14 @@ package br.usp.lti.newmoea.algorithm.fdea;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Random;
 import org.uma.jmetal.algorithm.Algorithm;
 import org.uma.jmetal.operator.crossover.CrossoverOperator;
 import org.uma.jmetal.operator.mutation.MutationOperator;
 import org.uma.jmetal.operator.selection.SelectionOperator;
 import org.uma.jmetal.problem.Problem;
 import org.uma.jmetal.solution.doublesolution.DoubleSolution;
+import org.uma.jmetal.util.densityestimator.impl.CrowdingDistanceDensityEstimator;
+import org.uma.jmetal.util.pseudorandom.JMetalRandom;
 import org.uma.jmetal.util.ranking.impl.FastNonDominatedSortRanking;
 
 /**
@@ -25,6 +26,19 @@ import org.uma.jmetal.util.ranking.impl.FastNonDominatedSortRanking;
  */
 public class FDEA implements Algorithm<List<DoubleSolution>> {
 
+    /**
+     * Variante do algoritmo FDEA:
+     * - {@link #I}: FDEA canônico (FDEA.java original de Liu et al., 2022), utilizando
+     *   amostragem primária MSBS seguida de LSBS para referências extremas e vetor de pesos
+     *   compartilhado global {@code re} (computeWS).
+     * - {@link #II}: Variante FDEA-II / FDEA1 (FDEA1.java original), utilizando amostragem
+     *   LSBS e ponderação local por subproblema (computeLWS).
+     */
+    public enum VERSION {
+        I,
+        II
+    }
+
     private final Problem<DoubleSolution> problem;
     private final int populationSize;
     private final int maxGenerations;
@@ -32,6 +46,7 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
     private final CrossoverOperator<DoubleSolution> crossover;
     private final MutationOperator<DoubleSolution> mutation;
     private final SelectionOperator<List<DoubleSolution>, DoubleSolution> selection;
+    private final VERSION version;
 
     private List<DoubleSolution> population;
     private int evaluations;
@@ -41,8 +56,6 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
     private double[] znadir;
     private double[][] extremePoints;
 
-    private final Random random = new Random();
-
     public FDEA(Problem<DoubleSolution> problem,
                 int populationSize,
                 int maxGenerations,
@@ -50,13 +63,27 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
                 CrossoverOperator<DoubleSolution> crossover,
                 MutationOperator<DoubleSolution> mutation,
                 SelectionOperator<List<DoubleSolution>, DoubleSolution> selection) {
+        this(problem, populationSize, maxGenerations, maxEvaluations, crossover, mutation, selection, VERSION.I);
+    }
+
+    public FDEA(Problem<DoubleSolution> problem,
+                int populationSize,
+                int maxGenerations,
+                int maxEvaluations,
+                CrossoverOperator<DoubleSolution> crossover,
+                MutationOperator<DoubleSolution> mutation,
+                SelectionOperator<List<DoubleSolution>, DoubleSolution> selection,
+                VERSION version) {
         this.problem = problem;
         this.populationSize = populationSize;
-        this.maxGenerations = maxGenerations;
         this.maxEvaluations = maxEvaluations > 0 ? maxEvaluations : maxGenerations * populationSize;
+        this.maxGenerations = maxGenerations > 0
+                ? maxGenerations
+                : (int) Math.ceil((double) this.maxEvaluations / Math.max(1, populationSize));
         this.crossover = crossover;
         this.mutation = mutation;
         this.selection = selection;
+        this.version = version != null ? version : VERSION.I;
         this.evaluations = 0;
         this.generations = 0;
     }
@@ -64,6 +91,9 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
     @Override
     public void run() {
         initPopulation();
+        if (population.isEmpty()) {
+            return;
+        }
         initIdealPoint();
         initNadirPoint();
         initExtremePoints();
@@ -72,6 +102,9 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
 
         while (evaluations < maxEvaluations && generations < maxGenerations) {
             List<DoubleSolution> offspring = reproduction();
+            if (offspring.isEmpty()) {
+                break;
+            }
             List<DoubleSolution> union = new ArrayList<>(population.size() + offspring.size());
             union.addAll(population);
             union.addAll(offspring);
@@ -96,26 +129,32 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
                 frontIndex++;
             }
 
-            if (st1.size() == populationSize) {
+            updateIdealPoint(st0);
+            if (st0.size() < numberOfObjectives) {
+                updateNadirPoint(st1);
+            } else {
+                updateNadirPoint(st0);
+            }
+
+            if (st1.size() <= populationSize) {
                 population = new ArrayList<>(st1);
             } else {
-                updateIdealPoint(st0);
-                if (st0.size() < numberOfObjectives) {
-                    updateNadirPoint(st1);
-                } else {
-                    updateNadirPoint(st0);
-                }
-
                 List<FDEAIndividual> pool = wrapSolutions(st1);
                 normalizeObjectives(pool);
 
                 double p = estimateCurvature(wrapSolutions(st0));
                 mapping(pool, p);
 
-                List<FDEAIndividual>[] msbsSubSets = new MostSimilarBasedSampling(pool, numberOfObjectives)
-                        .getIdealPointOrientedPopulation(populationSize);
+                List<FDEAIndividual>[] subSets;
+                if (version == VERSION.II) {
+                    subSets = new LeastSimilarBasedSampling(pool, numberOfObjectives)
+                            .getIdealPointOrientedPopulation(populationSize);
+                } else {
+                    subSets = new MostSimilarBasedSampling(pool, numberOfObjectives)
+                            .getIdealPointOrientedPopulation(populationSize);
+                }
 
-                List<DoubleSolution> nextPop = selectNextPopulation(msbsSubSets, p);
+                List<DoubleSolution> nextPop = selectNextPopulation(subSets, p);
                 population = nextPop;
             }
 
@@ -124,8 +163,9 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
     }
 
     private void initPopulation() {
-        population = new ArrayList<>(populationSize);
-        for (int i = 0; i < populationSize; i++) {
+        int initialCapacity = Math.min(populationSize, maxEvaluations);
+        population = new ArrayList<>(initialCapacity);
+        while (population.size() < populationSize && evaluations < maxEvaluations) {
             DoubleSolution solution = problem.createSolution();
             problem.evaluate(solution);
             evaluations++;
@@ -133,8 +173,30 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
         }
     }
 
+    /**
+     * Calcula ranking não-dominado e distância de crowding na população corrente
+     * antes de acionar operadores de seleção que dependem desses atributos
+     * (como {@code BinaryTournamentSelection(new RankingAndCrowdingDistanceComparator<>())}).
+     */
+    private void preparePopulationAttributesForSelection() {
+        if (population == null || population.isEmpty()) {
+            return;
+        }
+        FastNonDominatedSortRanking<DoubleSolution> ranking = new FastNonDominatedSortRanking<>();
+        ranking.compute(population);
+        CrowdingDistanceDensityEstimator<DoubleSolution> crowding = new CrowdingDistanceDensityEstimator<>();
+        for (int i = 0; i < ranking.getNumberOfSubFronts(); i++) {
+            crowding.compute(ranking.getSubFront(i));
+        }
+    }
+
     private List<DoubleSolution> reproduction() {
+        if (selection != null) {
+            preparePopulationAttributesForSelection();
+        }
+        JMetalRandom rng = JMetalRandom.getInstance();
         List<DoubleSolution> offspring = new ArrayList<>(populationSize);
+        int currentPopSize = population.size();
         while (offspring.size() < populationSize && evaluations < maxEvaluations) {
             DoubleSolution p1;
             DoubleSolution p2;
@@ -143,8 +205,13 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
                 p1 = selection.execute(population);
                 p2 = selection.execute(population);
             } else {
-                p1 = population.get(random.nextInt(populationSize));
-                p2 = population.get(random.nextInt(populationSize));
+                int idx1 = rng.nextInt(0, currentPopSize - 1);
+                int idx2 = rng.nextInt(0, currentPopSize - 1);
+                while (currentPopSize > 1 && idx1 == idx2) {
+                    idx2 = rng.nextInt(0, currentPopSize - 1);
+                }
+                p1 = population.get(idx1);
+                p2 = population.get(idx2);
             }
 
             List<DoubleSolution> parents = List.of(p1, p2);
@@ -406,7 +473,7 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
             c = p2[minId];
         }
 
-        if (c != 1.0 && cv < 0.15 && random.nextDouble() < 0.95) {
+        if (c != 1.0 && cv < 0.15 && JMetalRandom.getInstance().nextDouble() < 0.95) {
             c = mean < 0 ? 1.0 - cv : 1.0 + cv;
         }
 
@@ -491,18 +558,29 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
             clusters[minIndex].add(cand);
         }
 
-        // Calcula centros e vetor médio de pesos re
+        // Calcula centros locais por cluster e vetor médio global de pesos re
+        double[][] clusterCenters = new double[populationSize][m];
         double[] re = new double[m];
         for (int i = 0; i < populationSize; i++) {
             if (clusters[i].isEmpty()) {
                 continue;
             }
+            double centerSum = 0.0;
             for (int obj = 0; obj < m; obj++) {
                 double sumObj = 0.0;
                 for (FDEAIndividual ind : clusters[i]) {
                     sumObj += ind.getUnitHypersphereObjective(obj);
                 }
-                re[obj] += (sumObj / clusters[i].size());
+                double meanObj = sumObj / clusters[i].size();
+                clusterCenters[i][obj] = meanObj;
+                centerSum += meanObj;
+                re[obj] += meanObj;
+            }
+            if (centerSum < 1e-12) {
+                centerSum = 1e-6;
+            }
+            for (int obj = 0; obj < m; obj++) {
+                clusterCenters[i][obj] /= centerSum;
             }
         }
 
@@ -527,10 +605,13 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
                 // Preserva o ponto extremo no cluster de objetivo correspondente
                 nextPop.add(clusters[i].get(0).getSolution());
             } else {
+                double[] weights = (version == VERSION.II) ? clusterCenters[i] : re;
                 double minScore = Double.MAX_VALUE;
                 int bestIdx = 0;
                 for (int k = 0; k < clusters[i].size(); k++) {
-                    double score = computeWeightedSum(clusters[i].get(k), re);
+                    double score = (version == VERSION.II)
+                            ? computeLocalWeightedSum(clusters[i].get(k), weights)
+                            : computeWeightedSum(clusters[i].get(k), weights);
                     if (score < minScore) {
                         minScore = score;
                         bestIdx = k;
@@ -551,6 +632,16 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
         double val = 0.0;
         for (int i = 0; i < problem.numberOfObjectives(); i++) {
             val += ind.getNormalizedObjective(i) * weights[i];
+        }
+        return val;
+    }
+
+    private double computeLocalWeightedSum(FDEAIndividual ind, double[] localWeights) {
+        double val = 0.0;
+        int m = problem.numberOfObjectives();
+        for (int i = 0; i < m; i++) {
+            double w = Math.max(localWeights[i], 1e-6);
+            val += ind.getNormalizedObjective(i) / w;
         }
         return val;
     }
@@ -631,5 +722,29 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
 
     public List<DoubleSolution> getPopulation() {
         return population;
+    }
+
+    public int getEvaluations() {
+        return evaluations;
+    }
+
+    public int getGenerations() {
+        return generations;
+    }
+
+    public int getPopulationSize() {
+        return populationSize;
+    }
+
+    public int getMaxGenerations() {
+        return maxGenerations;
+    }
+
+    public int getMaxEvaluations() {
+        return maxEvaluations;
+    }
+
+    public VERSION getVersion() {
+        return version;
     }
 }
