@@ -36,6 +36,10 @@ import org.uma.jmetal.util.VectorUtils;
  * frentes de referência esparsas ({@code WFG4.15D.csv}), extrapolação legada ({@code WFG3.2D.csv}),
  * identidade exata pelo determinante Jacobiano e invariância estatística de Kruskal-Wallis entre
  * {@code HV} e {@code NHV}.
+ *
+ * <p><strong>Nota:</strong> Estes são testes de uma tarefa específica (T17) para verificação de
+ * contrato/normalização em frentes legadas protegidas e não devem ser usados como referência para
+ * execuções finais.
  */
 class NormalizationAndHvContractTest {
 
@@ -43,6 +47,7 @@ class NormalizationAndHvContractTest {
     @DisplayName("T17.1: Reproduz o truncamento severo em WFG4.15D.csv sob normalização amostral vs preservação sob normalização teórica")
     void testWfg4In15DSparseReferenceFrontTruncationVsTheoreticalBounds() throws IOException {
         int m = 15;
+        // Uso exclusivo de pasta legada protegida para teste de verificação da tarefa T17 (não usar em execuções finais).
         Path wfg4Path = Path.of("pareto_fronts", "csv", "WFG4.15D.csv");
         double[][] rawRef = VectorUtils.readVectors(wfg4Path.toString(), ",");
         assertThat(rawRef).hasDimensions(135, m);
@@ -229,6 +234,7 @@ class NormalizationAndHvContractTest {
     @Test
     @DisplayName("T17.4: Identidade numérica NHV(A) = 1 - HV(A)/HV(R) em O(1) e invariância exata de Kruskal-Wallis entre HV e NHV")
     void testNhvO1IdentityAndKruskalWallisRankAndStatisticInvariance() throws IOException {
+        // Uso exclusivo de pasta legada protegida para teste de verificação da tarefa T17 (não usar em execuções finais).
         Path refPath = Path.of("pareto_fronts", "csv", "DTLZ1.2D.csv");
         double[][] rawRef = VectorUtils.readVectors(refPath.toString(), ",");
         double[][] normRef = NormalizeUtils.normalize(rawRef);

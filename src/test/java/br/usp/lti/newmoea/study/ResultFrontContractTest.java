@@ -53,6 +53,10 @@ import org.uma.jmetal.util.pseudorandom.JMetalRandom;
  * Testes de contrato da população de saída ({@code algorithm.result()}), filtragem canônica
  * não-dominada sincronizada e alinhamento 1:1 de {@code FUN{run}.csv} e {@code VAR{run}.csv}
  * (Tarefa T19 / G1-3 / R9 / R16).
+ *
+ * <p><strong>Nota:</strong> O uso de {@code MOEAD_Weights} neste arquivo refere-se estritamente a
+ * teste de tarefa específica (T19) para verificação de contrato e não deve ser usado como referência
+ * para execuções finais.
  */
 class ResultFrontContractTest {
 
@@ -102,6 +106,7 @@ class ResultFrontContractTest {
                 .setMaximumNumberOfReplacedSolutions(1)
                 .setNeighborSize(20)
                 .setFunctionType(AbstractMOEAD.FunctionType.PBI)
+                // Pasta legada protegida usada apenas neste teste de verificação de contrato (T19), não em execuções finais.
                 .setDataDirectory("MOEAD_Weights")
                 .build();
         CanonicalResultExtraction moeaddExt = assertAndLogAlgorithmResult("MOEA/DD", moeadd, pMoeadd, 1);

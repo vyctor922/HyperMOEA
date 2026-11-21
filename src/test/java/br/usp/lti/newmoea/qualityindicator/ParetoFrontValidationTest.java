@@ -31,28 +31,44 @@ import org.uma.jmetal.util.NormalizeUtils;
 import org.uma.jmetal.util.VectorUtils;
 
 /**
- * Suite de validação das frentes de Pareto de referência (T04) em {@code pareto_fronts/csv/}.
+ * Suite de validação das frentes de Pareto de referência (T04) em
+ * {@code pareto_fronts/csv/}.
  *
- * <p>Cobre:
+ * <p>
+ * Cobre:
  * <ol>
- *   <li>Existência, dimensionalidade e finitude das 68 frentes referenciadas em {@code WFGStudy.java}
- *       (54 arquivos WFG1–WFG9 para \(m \in \{2, 3, 5, 8, 10, 15\}\) e 14 arquivos DTLZ1–DTLZ7 para
- *       \(m \in \{2, 3\}\));</li>
- *   <li>Validação analítica exata de DTLZ1–DTLZ7 (\(m \in \{2, 3\}\));</li>
- *   <li>Validação analítica do hiper-elipsoide côncavo de WFG4–WFG9 (\(m \in \{2, 3, 5, 8, 10, 15\}\));</li>
- *   <li>Auditoria programática das características e anomalias dos arquivos distribuídos pelo jMetal
- *       (WFG1–WFG3, duplicatas em \(m \ge 5\), valores negativos em {@code WFG3.2D.csv} e ausência de
- *       arquivos DTLZ para \(m \in \{5, 8, 10, 15\}\));</li>
- *   <li>Compatibilidade com os indicadores do pipeline ({@code PISAHypervolume},
- *       {@code NormalizedHypervolume}, {@code IGD}, {@code IGD+} e {@code R2});</li>
- *   <li>Testes negativos comprovando rejeição controlada de frentes inválidas ou malformadas.</li>
+ * <li>Existência, dimensionalidade e finitude das 68 frentes referenciadas em
+ * {@code WFGStudy.java}
+ * (54 arquivos WFG1–WFG9 para \(m \in \{2, 3, 5, 8, 10, 15\}\) e 14 arquivos
+ * DTLZ1–DTLZ7 para
+ * \(m \in \{2, 3\}\));</li>
+ * <li>Validação analítica exata de DTLZ1–DTLZ7 (\(m \in \{2, 3\}\));</li>
+ * <li>Validação analítica do hiper-elipsoide côncavo de WFG4–WFG9 (\(m \in \{2,
+ * 3, 5, 8, 10, 15\}\));</li>
+ * <li>Auditoria programática das características e anomalias dos arquivos
+ * distribuídos pelo jMetal
+ * (WFG1–WFG3, duplicatas em \(m \ge 5\), valores negativos em
+ * {@code WFG3.2D.csv} e ausência de
+ * arquivos DTLZ para \(m \in \{5, 8, 10, 15\}\));</li>
+ * <li>Compatibilidade com os indicadores do pipeline ({@code PISAHypervolume},
+ * {@code NormalizedHypervolume}, {@code IGD}, {@code IGD+} e {@code R2});</li>
+ * <li>Testes negativos comprovando rejeição controlada de frentes inválidas ou
+ * malformadas.</li>
  * </ol>
+ *
+ * <p>
+ * <strong>Nota:</strong> Estes são testes de uma tarefa específica (T04) para
+ * verificação de frentes
+ * legadas protegidas e não devem ser usados como referência para execuções
+ * finais.
  */
 class ParetoFrontValidationTest {
 
+    // Diretório legado protegido usado apenas para verificação/auditoria em T04
+    // (não usar em execuções finais).
     private static final Path PARETO_FRONTS_DIR = Paths.get("pareto_fronts", "csv");
-    private static final int[] WFG_OBJECTIVES = {2, 3, 5, 8, 10, 15};
-    private static final int[] DTLZ_OBJECTIVES = {2, 3};
+    private static final int[] WFG_OBJECTIVES = { 2, 3, 5, 8, 10, 15 };
+    private static final int[] DTLZ_OBJECTIVES = { 2, 3 };
 
     static Stream<Arguments> all68ReferencedFrontsProvider() {
         List<Arguments> args = new ArrayList<>();
@@ -154,9 +170,8 @@ class ParetoFrontValidationTest {
                 FrontValidationSummary summary = ParetoFrontValidator.validateParetoFrontFile(file, m);
                 assertThat(summary.hasNegativeValues()).isFalse();
 
-                double maxErr =
-                        ParetoFrontValidator.validateDtlz5And6DegenerateAnalytical(
-                                summary.points(), 1e-3);
+                double maxErr = ParetoFrontValidator.validateDtlz5And6DegenerateAnalytical(
+                        summary.points(), 1e-3);
                 assertThat(maxErr).isLessThanOrEqualTo(1e-12);
             }
         }
@@ -191,8 +206,7 @@ class ParetoFrontValidationTest {
                 .as("%s não deve possuir valores negativos", fileName)
                 .isFalse();
 
-        double maxEllipsoidError =
-                ParetoFrontValidator.validateWfgConcaveEllipsoid(summary.points(), 1e-4);
+        double maxEllipsoidError = ParetoFrontValidator.validateWfgConcaveEllipsoid(summary.points(), 1e-4);
         assertThat(maxEllipsoidError)
                 .as("Erro máximo do hiper-elipsoide em %s", fileName)
                 .isLessThanOrEqualTo(1e-5);
@@ -234,10 +248,10 @@ class ParetoFrontValidationTest {
     @DisplayName("T04.4b: Auditoria de contagens e duplicatas nos arquivos WFG de m in {5, 8, 10, 15}")
     void testAuditWfgManyObjectivePointCountsAndDuplicates() {
         int[][] expectedCountsByM = {
-            {5, 210},
-            {8, 156},
-            {10, 275},
-            {15, 135}
+                { 5, 210 },
+                { 8, 156 },
+                { 10, 275 },
+                { 15, 135 }
         };
 
         for (int p = 1; p <= 9; p++) {
@@ -245,11 +259,11 @@ class ParetoFrontValidationTest {
                 int m = pair[0];
                 int expectedTotal = pair[1];
                 String fileName = String.format("WFG%d.%dD.csv", p, m);
-                FrontValidationSummary summary =
-                        ParetoFrontValidator.validateParetoFrontFile(
-                                PARETO_FRONTS_DIR.resolve(fileName), m);
+                FrontValidationSummary summary = ParetoFrontValidator.validateParetoFrontFile(
+                        PARETO_FRONTS_DIR.resolve(fileName), m);
 
-                // As frentes WFG de m >= 5 do jMetal têm exatamente N linhas (210, 156, 275, 135)
+                // As frentes WFG de m >= 5 do jMetal têm exatamente N linhas (210, 156, 275,
+                // 135)
                 // mas possuem duplicatas internas em todas as combinações
                 assertThat(summary.totalPoints())
                         .as("Contagem total de linhas de %s", fileName)
@@ -265,7 +279,7 @@ class ParetoFrontValidationTest {
     @Test
     @DisplayName("T04.4c: Auditoria de ausência de arquivos DTLZ para m in {5, 8, 10, 15} em pareto_fronts/csv/")
     void testAuditAbsenceOfManyObjectiveDtlzFronts() {
-        int[] missingM = {5, 8, 10, 15};
+        int[] missingM = { 5, 8, 10, 15 };
         for (int p = 1; p <= 7; p++) {
             for (int m : missingM) {
                 Path path = PARETO_FRONTS_DIR.resolve(String.format("DTLZ%d.%dD.csv", p, m));
@@ -283,7 +297,7 @@ class ParetoFrontValidationTest {
     @Test
     @DisplayName("T04.5: Frentes normalizadas são consumidas corretamente por PISAHypervolume, NormalizedHypervolume, IGD, IGD+ e R2")
     void testIndicatorsCompatibilityWithNormalizedReferenceFronts() throws IOException {
-        String[] sampleFiles = {"WFG1.2D.csv", "WFG4.3D.csv", "DTLZ1.2D.csv", "DTLZ2.3D.csv", "DTLZ7.3D.csv"};
+        String[] sampleFiles = { "WFG1.2D.csv", "WFG4.3D.csv", "DTLZ1.2D.csv", "DTLZ2.3D.csv", "DTLZ7.3D.csv" };
 
         for (String fileName : sampleFiles) {
             Path path = PARETO_FRONTS_DIR.resolve(fileName);
@@ -299,10 +313,8 @@ class ParetoFrontValidationTest {
 
             PISAHypervolume hv = new PISAHypervolume(normalizedReferenceFront);
             NormalizedHypervolume nhv = new NormalizedHypervolume(normalizedReferenceFront);
-            InvertedGenerationalDistance igd =
-                    new InvertedGenerationalDistance(normalizedReferenceFront);
-            InvertedGenerationalDistancePlus igdPlus =
-                    new InvertedGenerationalDistancePlus(normalizedReferenceFront);
+            InvertedGenerationalDistance igd = new InvertedGenerationalDistance(normalizedReferenceFront);
+            InvertedGenerationalDistancePlus igdPlus = new InvertedGenerationalDistancePlus(normalizedReferenceFront);
             R2 r2 = new R2(normalizedReferenceFront);
 
             double hvVal = hv.compute(approxFront);
@@ -387,41 +399,44 @@ class ParetoFrontValidationTest {
     @Test
     @DisplayName("T04.6e: Validador analítico rejeita frentes que violam a geometria analítica (DTLZ1, DTLZ2, DTLZ7, WFG4)")
     void testRejectAnalyticalGeometryViolations() {
-        // Ponto fora do hiperplano soma = 0.5 de DTLZ1 (ex.: soma = 1.0 como em Das & Dennis)
-        double[][] badDtlz1 = {{0.5, 0.5}, {0.2, 0.3}};
+        // Ponto fora do hiperplano soma = 0.5 de DTLZ1 (ex.: soma = 1.0 como em Das &
+        // Dennis)
+        double[][] badDtlz1 = { { 0.5, 0.5 }, { 0.2, 0.3 } };
         assertThatThrownBy(() -> ParetoFrontValidator.validateDtlz1Analytical(badDtlz1, 1e-4))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("DTLZ1 violado");
 
         // Ponto fora da esfera unitária de DTLZ2
-        double[][] badSphere = {{1.0, 0.0}, {0.5, 0.5}};
+        double[][] badSphere = { { 1.0, 0.0 }, { 0.5, 0.5 } };
         assertThatThrownBy(() -> ParetoFrontValidator.validateUnitSphereAnalytical(badSphere, 1e-3))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Esfera unitária violada");
 
-        // Ponto violando colinearidade f1 = f2 de DTLZ5 em 3D (embora na esfera unitária)
-        double[][] badDtlz5 = {{0.6, 0.8, 0.0}};
+        // Ponto violando colinearidade f1 = f2 de DTLZ5 em 3D (embora na esfera
+        // unitária)
+        double[][] badDtlz5 = { { 0.6, 0.8, 0.0 } };
         assertThatThrownBy(
-                        () -> ParetoFrontValidator.validateDtlz5And6DegenerateAnalytical(badDtlz5, 1e-3))
+                () -> ParetoFrontValidator.validateDtlz5And6DegenerateAnalytical(badDtlz5, 1e-3))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Degenerescência DTLZ5/6 violada");
 
         // Ponto violando equação analítica de DTLZ7
-        double[][] badDtlz7 = {{0.2, 1.0}};
+        double[][] badDtlz7 = { { 0.2, 1.0 } };
         assertThatThrownBy(() -> ParetoFrontValidator.validateDtlz7Analytical(badDtlz7, 1e-4))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("DTLZ7 violado");
 
         // Ponto fora do hiper-elipsoide côncavo de WFG4–WFG9
-        double[][] badWfgEllipsoid = {{2.0, 4.0}}; // (2/2)^2 + (4/4)^2 = 2 != 1
+        double[][] badWfgEllipsoid = { { 2.0, 4.0 } }; // (2/2)^2 + (4/4)^2 = 2 != 1
         assertThatThrownBy(
-                        () -> ParetoFrontValidator.validateWfgConcaveEllipsoid(badWfgEllipsoid, 1e-4))
+                () -> ParetoFrontValidator.validateWfgConcaveEllipsoid(badWfgEllipsoid, 1e-4))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Hiper-elipsoide WFG violado");
     }
 
     // =========================================================================
-    // TESTE 7 (T07): Validação analítica e geração opcional de DTLZ1–DTLZ7 (m in {2,3,5,8,10,15})
+    // TESTE 7 (T07): Validação analítica e geração opcional de DTLZ1–DTLZ7 (m in
+    // {2,3,5,8,10,15})
     // =========================================================================
 
     static Stream<Arguments> all42DtlzConfigurationsProvider() {
@@ -462,7 +477,7 @@ class ParetoFrontValidationTest {
     @Test
     @DisplayName("T07.7b: Análise matemática específica da curva degenerada 1D de DTLZ5 e DTLZ6 no jMetal 7.8 para m >= 3")
     void testT07Dtlz5And6JMetalDegenerate1DCurveMathematics() {
-        for (int m : new int[]{2, 3, 5, 8, 10, 15}) {
+        for (int m : new int[] { 2, 3, 5, 8, 10, 15 }) {
             double[][] curve = ParetoFrontValidator.generateAnalyticalDtlz5And6Curve(m, 200);
             assertThat(curve).hasDimensions(200, m);
             assertThat(ParetoFrontValidator.countDominatedPoints(curve, 1e-9)).isZero();
@@ -471,7 +486,8 @@ class ParetoFrontValidationTest {
             assertThat(maxErr).isLessThanOrEqualTo(1e-14);
 
             if (m >= 3) {
-                // Verifica explicitamente as relações da curva 1D quando theta_1 = ... = theta_{m-2} = pi/4:
+                // Verifica explicitamente as relações da curva 1D quando theta_1 = ... =
+                // theta_{m-2} = pi/4:
                 // f_1 == f_2 e f_j = f_1 * (sqrt(2))^(j-2) para j = 3 .. m-1
                 for (double[] pt : curve) {
                     assertThat(pt[0]).isCloseTo(pt[1], org.assertj.core.data.Offset.offset(1e-15));
@@ -485,8 +501,9 @@ class ParetoFrontValidationTest {
             }
         }
 
-        // Rejeita ponto na esfera unitária que viola a progressão geométrica f_3 = sqrt(2)*f_1 em m=5
-        double[][] invalidCurve5D = {{0.5, 0.5, 0.5, 0.5, 0.0}};
+        // Rejeita ponto na esfera unitária que viola a progressão geométrica f_3 =
+        // sqrt(2)*f_1 em m=5
+        double[][] invalidCurve5D = { { 0.5, 0.5, 0.5, 0.5, 0.0 } };
         assertThatThrownBy(() -> ParetoFrontValidator.validateDtlz5And6JMetalCurveAnalytical(invalidCurve5D, 1e-4))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("DTLZ5/6 violado");
@@ -495,7 +512,7 @@ class ParetoFrontValidationTest {
     @Test
     @DisplayName("T07.7c: Análise matemática específica de DTLZ7 (intervalos desconexos I0 U I1, limites exatos de f_m e não-dominância)")
     void testT07Dtlz7MathematicalDomainAndDisconnectedComponents() {
-        for (int m : new int[]{2, 3, 5, 8, 10, 15}) {
+        for (int m : new int[] { 2, 3, 5, 8, 10, 15 }) {
             double[][] front = ParetoFrontValidator.generateAnalyticalDtlz7Front(m, 250);
             assertThat(ParetoFrontValidator.countDominatedPoints(front, 1e-9)).isZero();
 
@@ -532,7 +549,8 @@ class ParetoFrontValidationTest {
 
             // run0 contém 2 pontos não-dominados e 1 ponto dominado (0.6, 0.6)
             Files.writeString(run0, "0.1,0.9\n0.5,0.5\n0.6,0.6\n", StandardCharsets.UTF_8);
-            // run1 contém 1 duplicata (0.5, 0.5), 1 ponto novo não-dominado (0.9, 0.1) e 1 dominado (0.8, 0.8)
+            // run1 contém 1 duplicata (0.5, 0.5), 1 ponto novo não-dominado (0.9, 0.1) e 1
+            // dominado (0.8, 0.8)
             Files.writeString(run1, "0.5,0.5\n0.9,0.1\n0.8,0.8\n", StandardCharsets.UTF_8);
             Files.writeString(evalRun, "0.2,0.8\n", StandardCharsets.UTF_8);
 
@@ -566,23 +584,35 @@ class ParetoFrontValidationTest {
             assertThat(consolidatedSummary.duplicatePoints()).isZero();
             assertThat(ParetoFrontValidator.countDominatedPoints(consolidatedSummary.points(), 1e-9)).isZero();
 
-            // 3. Rejeita tentativa de usar a mesma execução (run1) tanto para construir quanto para avaliar a frente
+            // 3. Rejeita tentativa de usar a mesma execução (run1) tanto para construir
+            // quanto para avaliar a frente
             assertThatThrownBy(() -> ParetoFrontValidator.generateEmpiricalReferenceFront(
-                            "DTLZ2",
-                            2,
-                            List.of(run0, run1),
-                            List.of(run1),
-                            "overlap-test",
-                            outDir.resolve("sub"),
-                            true))
+                    "DTLZ2",
+                    2,
+                    List.of(run0, run1),
+                    List.of(run1),
+                    "overlap-test",
+                    outDir.resolve("sub"),
+                    true))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Violação metodológica: proibido usar o mesmo arquivo de execução");
 
-            // 4. Proíbe gravar qualquer frente gerada dentro de pareto_fronts/csv/
+            // 4. Proíbe gravar qualquer frente gerada dentro de diretórios legados
+            // protegidos (pareto_fronts/csv/, MOEAD_Weights/, pareto/)
             assertThatThrownBy(() -> ParetoFrontValidator.generateAndSaveAnalyticalDtlzFront(
-                            "DTLZ2", 5, 6, 0, PARETO_FRONTS_DIR, true))
+                    "DTLZ2", 5, 6, 0, PARETO_FRONTS_DIR, true))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("Proibido gravar ou sobrescrever arquivos no diretório protegido pareto_fronts/csv");
+                    .hasMessageContaining(
+                            "Proibido gravar ou sobrescrever arquivos no diretório protegido pareto_fronts/csv");
+            assertThatThrownBy(() -> ParetoFrontValidator.generateAndSaveAnalyticalDtlzFront(
+                    "DTLZ2", 5, 6, 0, Path.of("pareto"), true))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Proibido gravar ou sobrescrever arquivos no diretório protegido pareto/");
+            assertThatThrownBy(() -> ParetoFrontValidator.generateAndSaveAnalyticalDtlzFront(
+                    "DTLZ2", 5, 6, 0, Path.of("MOEAD_Weights"), true))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining(
+                            "Proibido gravar ou sobrescrever arquivos no diretório protegido MOEAD_Weights/");
         } finally {
             if (prevProp == null) {
                 System.clearProperty(ParetoFrontValidator.GENERATE_EMPIRICAL_REFERENCE_FRONTS_PROPERTY);
@@ -606,17 +636,18 @@ class ParetoFrontValidationTest {
                     "addToProblemList", List.class, int.class, int.class);
             addMethod.setAccessible(true);
 
-            // 1. Quando -DgenerateAllReferenceFronts=false (padrão), m=5 adiciona apenas os 9 problemas WFG (nenhum DTLZ)
-            List<org.uma.jmetal.lab.experiment.util.ExperimentProblem<org.uma.jmetal.solution.doublesolution.DoubleSolution>> defaultList5D =
-                    new ArrayList<>();
+            // 1. Quando -DgenerateAllReferenceFronts=false (padrão), m=5 adiciona apenas os
+            // 9 problemas WFG (nenhum DTLZ)
+            List<org.uma.jmetal.lab.experiment.util.ExperimentProblem<org.uma.jmetal.solution.doublesolution.DoubleSolution>> defaultList5D = new ArrayList<>();
             addMethod.invoke(null, defaultList5D, 5, 8);
             assertThat(defaultList5D).hasSize(9);
             assertThat(defaultList5D)
                     .extracting(org.uma.jmetal.lab.experiment.util.ExperimentProblem::getTag)
                     .allMatch(tag -> tag.startsWith("WFG"));
 
-            // 2. Quando -DgenerateAllReferenceFronts=true, m=5 gera e valida as 7 frentes DTLZ em resources/referenceFronts/pf_gen/
-            //    e adiciona 9 WFG + 7 DTLZ = 16 problemas
+            // 2. Quando -DgenerateAllReferenceFronts=true, m=5 gera e valida as 7 frentes
+            // DTLZ em resources/referenceFronts/pf_gen/
+            // e adiciona 9 WFG + 7 DTLZ = 16 problemas
             System.setProperty(ParetoFrontValidator.GENERATE_ALL_REFERENCE_FRONTS_PROPERTY, "true");
             assertThat(ParetoFrontValidator.isGenerateAllReferenceFrontsEnabled()).isTrue();
 
@@ -630,8 +661,7 @@ class ParetoFrontValidationTest {
             }
 
             try {
-                List<org.uma.jmetal.lab.experiment.util.ExperimentProblem<org.uma.jmetal.solution.doublesolution.DoubleSolution>> enabledList5D =
-                        new ArrayList<>();
+                List<org.uma.jmetal.lab.experiment.util.ExperimentProblem<org.uma.jmetal.solution.doublesolution.DoubleSolution>> enabledList5D = new ArrayList<>();
                 addMethod.invoke(null, enabledList5D, 5, 8);
                 assertThat(enabledList5D).hasSize(16);
                 assertThat(enabledList5D)

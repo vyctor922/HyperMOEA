@@ -318,21 +318,32 @@ A exclusão da classe e de seu teste permanece condicionada à migração comple
 
 Essas decisões deverão constar em `docs/resolucao_duplicatas_arquitetura.md`, produzido pelos agentes na IDE.
 
-### Matriz inicial de dependências
+### Matriz de execução e estado da Fase 4
 
-IDs propostos: T25–T31. Confirmar a disponibilidade dos números em `tasks/` antes da execução. Em caso de colisão, registrar o remapeamento sem sobrescrever tarefas.
+| ID | Descrição | Dependências | Estado | Responsável | Arquivos afetados / Evidências |
+|---|---|---|---|---|---|
+| **T25** | Inventário e caracterização da resolução atual | Histórico T12–T24 | `completed_validated` (2026-11-11 14:02) | Coordenador | `docs/duplicatas_analise-10do11.md`, baseline 378 testes passando |
+| **T26** | Duplicatas e arquitetura de destino | T25 | `completed_validated` (2026-11-11 14:36) | Coordenador | `docs/resolucao_duplicatas_arquitetura.md` aprovado formalmente pelo operador |
+| **T27** | Plano de mitigação da dívida técnica | T25; alinhamento T26; encerramento pós-T31 | `completed_validated` (2026-11-11 14:53) | Coordenador | `docs/plano_mitigacao_divida_tecnica.md` (7 dívidas DT-01..07 resolvidas) |
+| **T28** | Primitivas matemáticas e validações reutilizáveis | T26 aprovada | `completed_validated` (2026-11-11 14:38) | Coordenador | `ParetoFrontValidator.dominanceComparison`, `ResultFrontContract.dominates` |
+| **T29** | Resolução canônica, resultados ricos, baseDir e eliminação de fallbacks | T28; T26 aprovada | `completed_validated` (2026-11-11 14:45) | Coordenador | `ResolvedFrontArtifact`, `ResolvedWeightArtifact`, geração sob demanda em `weights_gen/`, eliminação de fallbacks em `WFGStudy`, `ParetoFrontValidator`, `PerformanceProfiler`, `EvaluationBudgetProblem` |
+| **T30** | Consumidores e manifesto dos artefatos efetivos | T29 | `completed_validated` (2026-11-11 14:48) | Coordenador | `ArtifactManifestEntry`, `ReferenceSetValidator.exportActiveArtifactManifestCsv`, `CanonicalArtifactResolutionAndManifestTest` |
+| **T31** | Exclusão condicionada do ArtifactResolver e validação final | T28–T30; plano T27 | `completed_validated` (2026-11-11 14:52) | Coordenador | Exclusão de `ArtifactResolver.java` e `ArtifactResolverTest.java`; `mvn clean test` aprovado com 370 testes (0 falhas, 0 erros) |
 
-| ID | Descrição | Dependências | Paralelismo | Arquivos potencialmente compartilhados | Condição de bloqueio | Estado inicial |
-|---|---|---|---|---|---|---|
-| T25 | Inventário e caracterização da resolução atual | Histórico e tarefas existentes | Inicialmente sequencial | Testes de caracterização; eventos | Ausência de arquivos necessários à conclusão do inventário | `pending` |
-| T26 | Duplicatas e arquitetura de destino | T25 | Pode ocorrer com T27, em documentos distintos | Documento arquitetural | Evidência insuficiente ou arquitetura sem aprovação | `pending` |
-| T27 | Plano de mitigação da dívida técnica | T25; alinhamento com T26 | Pode ocorrer com T26 | Plano de dívida técnica | Dívida sem evidência ou dependência indefinida | `pending` |
-| T28 | Primitivas matemáticas e validações reutilizáveis | T26 aprovada | Somente por arquivos independentes | Validadores; `ResultFrontContract` | Semânticas divergentes sem decisão aprovada | `pending` |
-| T29 | Resolução canônica, resultados ricos, baseDir e política de memória | T28; T26 aprovada | Sequencial nos arquivos compartilhados | Validadores; `WFGStudy`; DTOs | Artefatos sem validação, geração inadequada ou contrato de memória indefinido | `pending` |
-| T30 | Consumidores e manifesto | T29 | Condicionado à reserva de arquivos | `WFGStudy`; profiler; contador; manifesto | Consumidor não migrado ou manifesto incompatível com o consumo | `pending` |
-| T31 | Exclusão condicionada e validação final | T28–T30; plano inicial T27 | Integração sequencial | Resolver; testes; consumidores; documentação | Dependência residual, teste obrigatório reprovado ou evidência insuficiente | `pending` |
-
-A T27 terá uma entrega inicial e uma atualização final após receber os resultados da T31. A atualização final da T27 não é pré-condição para iniciar T31.
+### Decisões e Ajustes Consolidados da Fase 4
+1. **Resolução Canônica sem Fallback Legado**:
+   - As pastas `MOEAD_Weights/` e `pareto_fronts/csv/` foram totalmente desacopladas do fluxo operacional de resolução e preflight do experimento. Nenhum método de leitura ativa ou teste de existência as consulta em tempo de execução.
+   - Os arquivos físicos históricos permanecem estritamente preservados e protegidos contra modificação ou exclusão acidental.
+2. **Geração Canônica de Pesos do MOEA/DD**:
+   - Os arquivos de peso ausentes na distribuição oficial do jMetal para $m=5$ ($N=210$) e $m=15$ ($N=135$) são gerados e validados canonicamente segundo Das & Dennis zero-replaced ($0 \mapsto 10^{-5}$) diretamente em `resources/weightVectorFiles/weights_gen/`.
+3. **Retornos Estruturados e Hermeticidade**:
+   - Adotados records imutáveis `ResolvedFrontArtifact` e `ResolvedWeightArtifact`, com hash SHA-256 verificado e injeção opcional de `baseDir` para suporte a diretórios herméticos de testes (`@TempDir`).
+4. **Descontinuação e Exclusão Segura do `ArtifactResolver`**:
+   - A regra de geração de pesos em memória no jMetal 7.8 (`isMoeadWeightGeneratedInMemory`) e a exportação do manifesto CSV de artefatos foram integradas em `ReferenceSetValidator`.
+   - Após a migração de todos os consumidores e a aprovação de testes substitutos dedicados (`CanonicalArtifactResolutionAndManifestTest`), `ArtifactResolver.java` e `ArtifactResolverTest.java` foram excluídos definitivamente.
+5. **Resultado da Suíte de Testes**:
+   - Execução de `mvn clean test` aprovada com **370 testes executados em 23 classes (0 falhas, 0 erros, 0 ignorados)**.
+   - Campanha experimental completa mantida desativada, conforme restrição mandatória.
 
 ### Plano inicial de mitigação
 

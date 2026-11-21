@@ -52,9 +52,13 @@ import org.uma.jmetal.solution.doublesolution.DoubleSolution;
  *       {@link ParetoFrontValidator#generateAnalyticalDtlzFront} em todas as dimensões do estudo
  *       (\(m \in \{2, 3, 5, 8, 10, 15\}\)).</li>
  * </ul>
+ *
+ * <p><strong>Nota:</strong> Estes são testes de uma tarefa específica (T16) para verificação física e
+ * matemática de artefatos legados protegidos e não devem ser usados como referência para execuções finais.
  */
 class ReferenceFrontPhysicalAndMathAuditTest {
 
+    // Diretório legado protegido usado apenas para verificação/auditoria em T16 (não usar em execuções finais).
     private static final Path PARETO_FRONTS_DIR = Path.of("pareto_fronts", "csv");
     private static final int[] STUDY_DIMENSIONS = {2, 3, 5, 8, 10, 15};
 

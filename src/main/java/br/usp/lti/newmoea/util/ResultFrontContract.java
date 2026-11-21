@@ -1165,20 +1165,10 @@ public final class ResultFrontContract {
     /**
      * Retorna {@code true} se e somente se {@code a} domina estritamente {@code b} no sentido de
      * Pareto (minimização): {@code a[m] <= b[m]} para todo {@code m} e {@code a[m] < b[m]} para
-     * pelo menos um {@code m}.
+     * pelo menos um {@code m}. Delega para o comparador canônico em {@link ParetoFrontValidator#dominates(double[], double[])}.
      */
     public static boolean dominates(double[] a, double[] b) {
-        boolean strictlyBetterInAtLeastOne = false;
-        for (int i = 0; i < a.length; i++) {
-            int cmp = Double.compare(a[i], b[i]);
-            if (cmp > 0) {
-                return false;
-            }
-            if (cmp < 0) {
-                strictlyBetterInAtLeastOne = true;
-            }
-        }
-        return strictlyBetterInAtLeastOne;
+        return ParetoFrontValidator.dominates(a, b);
     }
 
     /**

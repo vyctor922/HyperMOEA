@@ -6,22 +6,27 @@ import java.util.List;
 import java.util.SplittableRandom;
 
 /**
- * Estimador de Hipervolume por Amostragem Monte Carlo i.i.d. uniforme com semente
- * determinística reproduzível, cálculo exato de variância amostral, erro padrão (SE)
- * e Intervalo de Confiança Binomial de Wilson a 95%.
+ * Estimador de Hipervolume por Amostragem Monte Carlo i.i.d. uniforme com
+ * semente determinística reproduzível, cálculo exato de variância amostral,
+ * erro padrão (SE) e Intervalo de Confiança Binomial de Wilson a 95%.
  *
- * <p>Propriedades estatísticas comprovadas:
- * <ul>
- *   <li>Caixa delimitadora canônica: $[\mathbf{l}, \mathbf{r}]$ com volume $V = \prod (r_i - l_i)$.</li>
- *   <li>Variável de Bernoulli: $I_k = 1$ se o ponto amostrado $\mathbf{u}_k$ for dominado por
- *       algum ponto da frente; $0$ caso contrário.</li>
- *   <li>Estimador não-viesado: $\hat{p} = X / S \implies \mathbb{E}[\widehat{HV}] = V \cdot p = HV$.</li>
- *   <li>Variância amostral e erro padrão: $\text{Var}(\widehat{HV}) = V^2 \frac{p(1-p)}{S}$,
- *       $\text{SE} = V \sqrt{\frac{\hat{p}(1-\hat{p})}{S}}$.</li>
- *   <li>Intervalo de Wilson Score ($1 - \alpha = 0.95$, $z = 1.95996398454$):
- *       quando $X = 0$, o limite superior de Wilson é estritamente positivo:
- *       $CI_{upper} = V \frac{z^2}{S + z^2} > 0$, prevenindo falsos zeros absolutos.</li>
- * </ul>
+ * Propriedades estatísticas comprovadas:
+ * - Caixa delimitadora canônica: $[\mathbf{l}, \mathbf{r}]$ com volume $V =
+ * \prod (r_i - l_i)$.</li>
+ * - Variável de Bernoulli: $I_k = 1$ se o ponto amostrado $\mathbf{u}_k$ for
+ * dominado por algum ponto da frente; $0$ caso contrário.</li>
+ * - Estimador não-viesado: $\hat{p} = X / S \implies \mathbb{E}[\widehat{HV}] =
+ * V \cdot p = HV$.</li>
+ * - Variância amostral e erro padrão: $\text{Var}(\widehat{HV}) = V^2
+ * \frac{p(1-p)}{S}$, $\text{SE} = V \sqrt{\frac{\hat{p}(1-\hat{p})}{S}}$.</li>
+ * - Intervalo de Wilson Score ($1 - \alpha = 0.95$, $z = 1.95996398454$):
+ * quando $X = 0$, o limite superior de Wilson é estritamente positivo:
+ * $CI_{upper} = V \frac{z^2}{S + z^2} > 0$, prevenindo falsos zeros
+ * absolutos.</li>
+ * 
+ * Inspirado no código de Richard A. Gonçalves e Carolina Paula de Almeida
+ * alterado por Olacir de Castro Junior
+ * 
  */
 public final class MonteCarloHypervolume {
 
@@ -33,13 +38,14 @@ public final class MonteCarloHypervolume {
     }
 
     /**
-     * Calcula o hipervolume por Monte Carlo com caixa delimitadora explícita [lower, upper].
+     * Calcula o hipervolume por Monte Carlo com caixa delimitadora explícita
+     * [lower, upper].
      *
-     * @param front matriz de pontos da frente (N x m)
-     * @param lowerBound vetor de limites inferiores l (tamanho m)
+     * @param front          matriz de pontos da frente (N x m)
+     * @param lowerBound     vetor de limites inferiores l (tamanho m)
      * @param referencePoint vetor de referência r (tamanho m, upper bound)
-     * @param sampleCount quantidade de amostras S (deve ser > 0)
-     * @param seed semente pseudo-aleatória determinística
+     * @param sampleCount    quantidade de amostras S (deve ser > 0)
+     * @param seed           semente pseudo-aleatória determinística
      * @return HypervolumeResult estruturado com métricas e IC Wilson
      */
     public static HypervolumeResult compute(
@@ -58,7 +64,8 @@ public final class MonteCarloHypervolume {
 
         double[] lower = lowerBound != null ? lowerBound.clone() : new double[m];
         if (lower.length != m) {
-            throw new IllegalArgumentException("lowerBound length (" + lower.length + ") does not match referencePoint length (" + m + ")");
+            throw new IllegalArgumentException(
+                    "lowerBound length (" + lower.length + ") does not match referencePoint length (" + m + ")");
         }
 
         // Validação da caixa delimitadora
@@ -66,7 +73,7 @@ public final class MonteCarloHypervolume {
         double[] span = new double[m];
         for (int i = 0; i < m; i++) {
             if (Double.isNaN(referencePoint[i]) || Double.isInfinite(referencePoint[i]) ||
-                Double.isNaN(lower[i]) || Double.isInfinite(lower[i])) {
+                    Double.isNaN(lower[i]) || Double.isInfinite(lower[i])) {
                 throw new IllegalArgumentException("Coordinates of bounding box must be finite");
             }
             if (referencePoint[i] <= lower[i]) {
@@ -85,7 +92,8 @@ public final class MonteCarloHypervolume {
             return HypervolumeResult.emptyFront(referencePoint);
         }
 
-        // Filtrar pontos válidos que estritamente dominam ao menos parte do espaço delimitado por r
+        // Filtrar pontos válidos que estritamente dominam ao menos parte do espaço
+        // delimitado por r
         List<double[]> contributingPointsList = new ArrayList<>(front.length);
         for (double[] point : front) {
             if (point == null || point.length != m) {
@@ -98,7 +106,8 @@ public final class MonteCarloHypervolume {
                     valid = false;
                     break;
                 }
-                // Se point[i] >= referencePoint[i], o ponto não pode dominar nenhum ponto no interior de [l, r]
+                // Se point[i] >= referencePoint[i], o ponto não pode dominar nenhum ponto no
+                // interior de [l, r]
                 if (point[i] >= referencePoint[i]) {
                     dominatesBoxPart = false;
                     break;
@@ -126,7 +135,8 @@ public final class MonteCarloHypervolume {
                 sample[i] = lower[i] + rng.nextDouble() * span[i];
             }
 
-            // Teste de dominância: sample é dominado se existe p tal que p[i] <= sample[i] para todo i
+            // Teste de dominância: sample é dominado se existe p tal que p[i] <= sample[i]
+            // para todo i
             for (int p = 0; p < nPoints; p++) {
                 double[] pt = activePoints[p];
                 boolean dominated = true;
@@ -183,8 +193,7 @@ public final class MonteCarloHypervolume {
                 referencePoint,
                 String.format(java.util.Locale.US,
                         "Monte Carlo S=%d, X=%d, pHat=%.6e, SE=%.6e, Wilson 95%%=[%.6e, %.6e]",
-                        sampleCount, hitCount, pHat, seHv, ciLowerHv, ciUpperHv)
-        );
+                        sampleCount, hitCount, pHat, seHv, ciLowerHv, ciUpperHv));
     }
 
     private static HypervolumeResult calculateZeroHitResult(
@@ -218,8 +227,6 @@ public final class MonteCarloHypervolume {
                 referencePoint,
                 String.format(java.util.Locale.US,
                         "Zero hits in Monte Carlo: S=%d, X=0, Wilson upper bound=%.6e (non-zero)",
-                        sampleCount, ciUpperHv)
-        );
+                        sampleCount, ciUpperHv));
     }
 }
-

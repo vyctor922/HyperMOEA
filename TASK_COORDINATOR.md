@@ -335,7 +335,7 @@ Exige:
 
 A0 libera a investigação arquitetural T26 e a elaboração inicial do plano T27.
 
-Não libera refatorações de produção.
+Nesse caso não libera refatorações de produção.
 
 #### A1 — Arquitetura consolidada e aprovada
 

@@ -5,9 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import br.usp.lti.newmoea.study.StaticParams;
 import br.usp.lti.newmoea.study.WFGStudy;
-import br.usp.lti.newmoea.util.ArtifactResolver;
-import br.usp.lti.newmoea.util.ArtifactResolver.FrontSourcePolicy;
-import br.usp.lti.newmoea.util.ArtifactResolver.ResolvedFrontArtifact;
+import br.usp.lti.newmoea.util.ParetoFrontValidator;
+import br.usp.lti.newmoea.util.ResolvedFrontArtifact;
 import br.usp.lti.newmoea.util.ParetoFrontValidator;
 import br.usp.lti.newmoea.util.ParetoFrontValidator.FrontValidationSummary;
 import br.usp.lti.newmoea.util.ParetoFrontValidator.GeneratedFrontReport;
@@ -30,18 +29,16 @@ class ReferenceFrontCanonicalPriorityTest {
     void testPriority1ResourcesReferenceFrontsDirectConsumption() {
         // WFG1 em 2D existe diretamente em resources/referenceFronts/
         ResolvedFrontArtifact wfg1_2d =
-                ArtifactResolver.resolveReferenceFront(
-                        "WFG1", 2, FrontSourcePolicy.CANONICAL_RESOURCE_PRIORITY);
-        assertThat(wfg1_2d.sourceCategory()).isEqualTo("CANONICAL_RESOURCE_FRONT");
+                ParetoFrontValidator.resolveCanonicalFrontArtifact("WFG1", 2, null, false, true);
+        assertThat(wfg1_2d.sourceCategory()).isEqualTo("OFFICIAL");
         assertThat(wfg1_2d.path().toString().replace('\\', '/'))
                 .contains("resources/referenceFronts/WFG1.2D.csv")
                 .doesNotContain("pf_gen");
 
         // DTLZ1 em 2D existe diretamente em resources/referenceFronts/
         ResolvedFrontArtifact dtlz1_2d =
-                ArtifactResolver.resolveReferenceFront(
-                        "DTLZ1", 2, FrontSourcePolicy.CANONICAL_RESOURCE_PRIORITY);
-        assertThat(dtlz1_2d.sourceCategory()).isEqualTo("CANONICAL_RESOURCE_FRONT");
+                ParetoFrontValidator.resolveCanonicalFrontArtifact("DTLZ1", 2, null, false, true);
+        assertThat(dtlz1_2d.sourceCategory()).isEqualTo("OFFICIAL");
         assertThat(dtlz1_2d.path().toString().replace('\\', '/'))
                 .contains("resources/referenceFronts/DTLZ1.2D.csv")
                 .doesNotContain("pf_gen");
@@ -57,9 +54,8 @@ class ReferenceFrontCanonicalPriorityTest {
         assertThat(pfGenFile).exists();
 
         ResolvedFrontArtifact dtlz1_5d =
-                ArtifactResolver.resolveReferenceFront(
-                        "DTLZ1", 5, FrontSourcePolicy.CANONICAL_RESOURCE_PRIORITY);
-        assertThat(dtlz1_5d.sourceCategory()).isEqualTo("ANALYTICAL_PF_GEN_DTLZ");
+                ParetoFrontValidator.resolveCanonicalFrontArtifact("DTLZ1", 5, null, false, true);
+        assertThat(dtlz1_5d.sourceCategory()).isEqualTo("PF_GEN");
         assertThat(dtlz1_5d.path().toString().replace('\\', '/'))
                 .contains("resources/referenceFronts/pf_gen/DTLZ1.5D.csv");
     }
@@ -169,9 +165,9 @@ class ReferenceFrontCanonicalPriorityTest {
         String dir3 = WFGStudy.resolveMoeadDataDirectory(baseWeights, 3, 91);
         assertThat(dir3).isEqualTo("resources/weightVectorFiles");
 
-        // m=5, N=210 -> MOEAD_Weights (fallback documentado para arquivos ausentes na distribuição oficial)
+        // m=5, N=210 -> resources/weightVectorFiles/weights_gen (resolução canônica via gerado/on-demand, sem fallback legado)
         String dir5 = WFGStudy.resolveMoeadDataDirectory(baseWeights, 5, 210);
-        assertThat(dir5).isEqualTo("MOEAD_Weights");
+        assertThat(dir5).isEqualTo("resources/weightVectorFiles/weights_gen");
 
         // m=8, N=156 -> resources/weightVectorFiles
         String dir8 = WFGStudy.resolveMoeadDataDirectory(baseWeights, 8, 156);
@@ -181,9 +177,9 @@ class ReferenceFrontCanonicalPriorityTest {
         String dir10 = WFGStudy.resolveMoeadDataDirectory(baseWeights, 10, 275);
         assertThat(dir10).isEqualTo("resources/weightVectorFiles");
 
-        // m=15, N=135 -> MOEAD_Weights
+        // m=15, N=135 -> resources/weightVectorFiles/weights_gen (resolução canônica via gerado/on-demand, sem fallback legado)
         String dir15 = WFGStudy.resolveMoeadDataDirectory(baseWeights, 15, 135);
-        assertThat(dir15).isEqualTo("MOEAD_Weights");
+        assertThat(dir15).isEqualTo("resources/weightVectorFiles/weights_gen");
     }
 }
 

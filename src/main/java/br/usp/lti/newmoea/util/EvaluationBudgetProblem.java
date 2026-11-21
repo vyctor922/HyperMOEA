@@ -31,27 +31,43 @@ import org.uma.jmetal.util.evaluator.SolutionListEvaluator;
 import org.uma.jmetal.util.referencepoint.ReferencePointGenerator;
 
 /**
- * Wrapper thread-safe sobre {@link DoubleProblem} para auditoria e imposição de contrato de
- * orçamento real de avaliações ({@link Problem#evaluate(Object)}) na Fase 3 (T13).
+ * Wrapper thread-safe sobre {@link DoubleProblem} para auditoria e imposição de
+ * contrato de
+ * orçamento real de avaliações ({@link Problem#evaluate(Object)}) na Fase 3
+ * (T13).
  *
- * <p>Contabiliza atomicamente cada chamada real a {@code evaluate(DoubleSolution)} de forma
- * independente dos contadores internos dos algoritmos e suporta dois modos operacionais:
+ * <p>
+ * Contabiliza atomicamente cada chamada real a {@code evaluate(DoubleSolution)}
+ * de forma
+ * independente dos contadores internos dos algoritmos e suporta dois modos
+ * operacionais:
  *
  * <ul>
- *   <li><b>Modo Auditoria ({@code enforceHardBudget = false})</b>: executa 100% das chamadas a
- *       {@link #evaluate(DoubleSolution)} feitas pelo algoritmo até sua parada natural,
- *       contabilizando avaliações efetivas, excedentes ({@code evaluations > maxBudget}) e a última
- *       solução válida avaliada dentro do orçamento.
- *   <li><b>Modo Contrato Estrito ({@code enforceHardBudget = true} + {@link BudgetContractEvaluator})</b>:
- *       impõe o teto exato {@code maxBudget} de avaliações reais ao problema subjacente sem lançar
- *       exceção arbitrária que corrompa o estado do algoritmo. Quando acoplado via
- *       {@link #createSolutionListEvaluator()} (para {@code NSGA-III}, {@code AGE-MOEA},
- *       {@code AGE-MOEA-II}) ou {@link #createComponentEvaluation()} (para {@code RVEA}), trunca de
- *       forma segura o lote final parcial para exatamente as soluções avaliadas dentro do orçamento
- *       restante. Caso uma chamada residual a {@link #evaluate(DoubleSolution)} ocorra diretamente
- *       após o esgotamento do orçamento, realiza fallback determinístico sem invocar o problema
- *       subjacente, registrando separadamente {@link #getActualProblemEvaluations()} e
- *       {@link #getAttemptedEvaluations()}.
+ * <li><b>Modo Auditoria ({@code enforceHardBudget = false})</b>: executa 100%
+ * das chamadas a
+ * {@link #evaluate(DoubleSolution)} feitas pelo algoritmo até sua parada
+ * natural,
+ * contabilizando avaliações efetivas, excedentes
+ * ({@code evaluations > maxBudget}) e a última
+ * solução válida avaliada dentro do orçamento.
+ * <li><b>Modo Contrato Estrito ({@code enforceHardBudget = true} +
+ * {@link BudgetContractEvaluator})</b>:
+ * impõe o teto exato {@code maxBudget} de avaliações reais ao problema
+ * subjacente sem lançar
+ * exceção arbitrária que corrompa o estado do algoritmo. Quando acoplado via
+ * {@link #createSolutionListEvaluator()} (para {@code NSGA-III},
+ * {@code AGE-MOEA},
+ * {@code AGE-MOEA-II}) ou {@link #createComponentEvaluation()} (para
+ * {@code RVEA}), trunca de
+ * forma segura o lote final parcial para exatamente as soluções avaliadas
+ * dentro do orçamento
+ * restante. Caso uma chamada residual a {@link #evaluate(DoubleSolution)}
+ * ocorra diretamente
+ * após o esgotamento do orçamento, realiza fallback determinístico sem invocar
+ * o problema
+ * subjacente, registrando separadamente {@link #getActualProblemEvaluations()}
+ * e
+ * {@link #getAttemptedEvaluations()}.
  * </ul>
  */
 public class EvaluationBudgetProblem implements DoubleProblem {
@@ -59,11 +75,11 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     private static final long serialVersionUID = 1L;
 
     /** Identificadores canônicos dos 6 algoritmos principais do estudo. */
-    public static final List<String> MAIN_ALGORITHMS =
-            List.of("NSGA-III", "MOEA/DD", "FDEA", "RVEA", "AGE-MOEA", "AGE-MOEA-II");
+    public static final List<String> MAIN_ALGORITHMS = List.of("NSGA-III", "MOEA/DD", "FDEA", "RVEA", "AGE-MOEA",
+            "AGE-MOEA-II");
 
     /** Dimensões de objetivos canônicas do protocolo experimental. */
-    public static final int[] CANONICAL_OBJECTIVES = {2, 3, 5, 8, 10, 15};
+    public static final int[] CANONICAL_OBJECTIVES = { 2, 3, 5, 8, 10, 15 };
 
     private final DoubleProblem delegate;
     private final long maxBudget;
@@ -74,15 +90,17 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     private final AtomicLong suppressedOvershootEvaluations = new AtomicLong(0L);
     private final AtomicInteger evaluatorBatchCalls = new AtomicInteger(0);
     private final AtomicReference<double[]> lastValidObjectives = new AtomicReference<>(null);
-    private final AtomicReference<List<DoubleSolution>> lastValidBatchSnapshot =
-            new AtomicReference<>(Collections.emptyList());
+    private final AtomicReference<List<DoubleSolution>> lastValidBatchSnapshot = new AtomicReference<>(
+            Collections.emptyList());
 
     /**
-     * Cria um wrapper em modo auditoria ({@code enforceHardBudget = false}) com orçamento alvo
+     * Cria um wrapper em modo auditoria ({@code enforceHardBudget = false}) com
+     * orçamento alvo
      * informado.
      *
-     * @param delegate problema {@link DoubleProblem} subjacente
-     * @param maxBudget orçamento alvo \(B_{\text{target}}\) para auditoria de excedente
+     * @param delegate  problema {@link DoubleProblem} subjacente
+     * @param maxBudget orçamento alvo \(B_{\text{target}}\) para auditoria de
+     *                  excedente
      */
     public EvaluationBudgetProblem(DoubleProblem delegate, long maxBudget) {
         this(delegate, maxBudget, false);
@@ -91,10 +109,12 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     /**
      * Cria um wrapper configurável sobre {@link DoubleProblem}.
      *
-     * @param delegate problema {@link DoubleProblem} subjacente (não nulo)
-     * @param maxBudget orçamento alvo \(B_{\text{target}} > 0\)
-     * @param enforceHardBudget {@code true} para bloquear chamadas reais ao problema subjacente
-     *     após atingir {@code maxBudget}; {@code false} para apenas auditar todas as chamadas
+     * @param delegate          problema {@link DoubleProblem} subjacente (não nulo)
+     * @param maxBudget         orçamento alvo \(B_{\text{target}} > 0\)
+     * @param enforceHardBudget {@code true} para bloquear chamadas reais ao
+     *                          problema subjacente
+     *                          após atingir {@code maxBudget}; {@code false} para
+     *                          apenas auditar todas as chamadas
      */
     public EvaluationBudgetProblem(
             DoubleProblem delegate, long maxBudget, boolean enforceHardBudget) {
@@ -111,8 +131,9 @@ public class EvaluationBudgetProblem implements DoubleProblem {
      * Avalia uma solução contabilizando atomicamente a chamada.
      *
      * @param solution solução a avaliar
-     * @return a própria solução avaliada (ou preenchida com objetivos finitos de fallback caso
-     *     {@code enforceHardBudget == true} e o orçamento já esteja esgotado)
+     * @return a própria solução avaliada (ou preenchida com objetivos finitos de
+     *         fallback caso
+     *         {@code enforceHardBudget == true} e o orçamento já esteja esgotado)
      */
     @Override
     public DoubleSolution evaluate(DoubleSolution solution) {
@@ -133,7 +154,8 @@ public class EvaluationBudgetProblem implements DoubleProblem {
             return evaluated;
         }
 
-        // Hard-stop ativo e tentativa excede maxBudget: não invoca delegate.evaluate(solution)
+        // Hard-stop ativo e tentativa excede maxBudget: não invoca
+        // delegate.evaluate(solution)
         suppressedOvershootEvaluations.incrementAndGet();
         double[] fallback = lastValidObjectives.get();
         double[] targetObjectives = solution.objectives();
@@ -151,7 +173,10 @@ public class EvaluationBudgetProblem implements DoubleProblem {
         return solution;
     }
 
-    /** Reinicia todos os contadores atômicos para reutilização limpa em testes controlados. */
+    /**
+     * Reinicia todos os contadores atômicos para reutilização limpa em testes
+     * controlados.
+     */
     public void resetCounters() {
         attemptedEvaluations.set(0L);
         actualProblemEvaluations.set(0L);
@@ -177,7 +202,8 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Retorna o número total de chamadas a {@link #evaluate(DoubleSolution)} tentadas pelo
+     * Retorna o número total de chamadas a {@link #evaluate(DoubleSolution)}
+     * tentadas pelo
      * algoritmo (incluindo eventuais chamadas suprimidas no modo estrito).
      */
     public long getAttemptedEvaluations() {
@@ -185,8 +211,10 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Retorna o número exato de chamadas efetivamente repassadas a {@code delegate.evaluate(...)}.
-     * No modo auditoria, coincide com {@link #getAttemptedEvaluations()}; no modo estrito, é
+     * Retorna o número exato de chamadas efetivamente repassadas a
+     * {@code delegate.evaluate(...)}.
+     * No modo auditoria, coincide com {@link #getAttemptedEvaluations()}; no modo
+     * estrito, é
      * garantidamente \(\le \text{maxBudget}\).
      */
     public long getActualProblemEvaluations() {
@@ -194,7 +222,8 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Alias semântico para {@link #getActualProblemEvaluations()} (total de avaliações reais da
+     * Alias semântico para {@link #getActualProblemEvaluations()} (total de
+     * avaliações reais da
      * função objetivo).
      */
     public long getEvaluationCount() {
@@ -202,7 +231,8 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Retorna a quantidade de avaliações acima de {@code maxBudget} (tentadas no modo auditoria ou
+     * Retorna a quantidade de avaliações acima de {@code maxBudget} (tentadas no
+     * modo auditoria ou
      * suprimidas no modo estrito).
      */
     public long getOvershootEvaluations() {
@@ -210,7 +240,9 @@ public class EvaluationBudgetProblem implements DoubleProblem {
         return Math.max(0L, attempted - maxBudget);
     }
 
-    /** Indica se o algoritmo tentou avaliar mais soluções do que {@code maxBudget}. */
+    /**
+     * Indica se o algoritmo tentou avaliar mais soluções do que {@code maxBudget}.
+     */
     public boolean hasOvershoot() {
         return attemptedEvaluations.get() > maxBudget;
     }
@@ -226,7 +258,8 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Retorna quantas avaliações ainda restam no orçamento (\(\max(0, B_{\text{target}} -
+     * Retorna quantas avaliações ainda restam no orçamento (\(\max(0,
+     * B_{\text{target}} -
      * B_{\text{real}})\)).
      */
     public long getRemainingBudget() {
@@ -267,9 +300,13 @@ public class EvaluationBudgetProblem implements DoubleProblem {
      * Cria um {@link SolutionListEvaluator} compatível com {@code NSGAIIIBuilder},
      * {@code AGEMOEABuilder} e {@code AGEMOEAIIBuilder}.
      *
-     * <p>Quando {@code enforceHardBudget == true}, avalia apenas as soluções do lote até atingir
-     * {@code maxBudget} e trunca a lista de descendentes retornada ao algoritmo para conter apenas
-     * os filhos efetivamente avaliados dentro do orçamento (evitando seleção ambiental sobre
+     * <p>
+     * Quando {@code enforceHardBudget == true}, avalia apenas as soluções do lote
+     * até atingir
+     * {@code maxBudget} e trunca a lista de descendentes retornada ao algoritmo
+     * para conter apenas
+     * os filhos efetivamente avaliados dentro do orçamento (evitando seleção
+     * ambiental sobre
      * indivíduos não avaliados).
      */
     public SolutionListEvaluator<DoubleSolution> createSolutionListEvaluator() {
@@ -277,10 +314,14 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Cria um componente {@link Evaluation} compatível com {@code RVEABuilder.setEvaluation(...)}.
+     * Cria um componente {@link Evaluation} compatível com
+     * {@code RVEABuilder.setEvaluation(...)}.
      *
-     * <p>Quando {@code enforceHardBudget == true}, avalia no máximo as soluções necessárias para
-     * completar {@code maxBudget}, truncando o lote final parcial caso restem menos avaliações do
+     * <p>
+     * Quando {@code enforceHardBudget == true}, avalia no máximo as soluções
+     * necessárias para
+     * completar {@code maxBudget}, truncando o lote final parcial caso restem menos
+     * avaliações do
      * que o tamanho do lote.
      */
     public Evaluation<DoubleSolution> createComponentEvaluation() {
@@ -288,8 +329,10 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Avaliador de listas de soluções consciente do orçamento para algoritmos baseados em
-     * {@code AbstractGeneticAlgorithm} ({@code NSGA-III}, {@code AGE-MOEA}, {@code AGE-MOEA-II}).
+     * Avaliador de listas de soluções consciente do orçamento para algoritmos
+     * baseados em
+     * {@code AbstractGeneticAlgorithm} ({@code NSGA-III}, {@code AGE-MOEA},
+     * {@code AGE-MOEA-II}).
      */
     public final class BudgetContractEvaluator implements SolutionListEvaluator<DoubleSolution> {
 
@@ -335,7 +378,8 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Componente {@link Evaluation} consciente do orçamento para algoritmos do módulo
+     * Componente {@link Evaluation} consciente do orçamento para algoritmos do
+     * módulo
      * {@code jmetal-component} ({@code RVEA}).
      */
     public final class BudgetComponentEvaluation implements Evaluation<DoubleSolution> {
@@ -399,7 +443,8 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     // =========================================================================
 
     /**
-     * Retorna o tamanho de população configurado canonicamente (\(N_{\text{config}}(m)\)) em
+     * Retorna o tamanho de população configurado canonicamente
+     * (\(N_{\text{config}}(m)\)) em
      * {@link StaticParams#getPopulationSize(int)}.
      *
      * @param m número de objetivos (\(m \in \{2, 3, 5, 8, 10, 15\}\))
@@ -411,22 +456,26 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Retorna o tamanho real da população interna alocada (\(N_{\text{alloc}}(\text{alg}, m)\)) por
+     * Retorna o tamanho real da população interna alocada
+     * (\(N_{\text{alloc}}(\text{alg}, m)\)) por
      * cada um dos 6 algoritmos principais no estado atual de {@code WFGStudy.java}:
      *
      * <ul>
-     *   <li>{@code NSGA-III}: arredonda o número de pontos de referência para o próximo múltiplo de
-     *       4 em {@code NSGAIII.<init>} ({@code while (popSize % 4 > 0) popSize++}) \(\implies
-     *       \{100, 92, 212, 156, 276, 136\}\);
-     *   <li>{@code AGE-MOEA} e {@code AGE-MOEA-II}: incrementam \(N\) ímpar em
-     *       {@code WFGStudy.buildAGEMOEA/buildAGE2} ({@code if (populationSize % 2 != 0)
+     * <li>{@code NSGA-III}: arredonda o número de pontos de referência para o
+     * próximo múltiplo de
+     * 4 em {@code NSGAIII.<init>} ({@code while (popSize % 4 > 0) popSize++})
+     * \(\implies
+     * \{100, 92, 212, 156, 276, 136\}\);
+     * <li>{@code AGE-MOEA} e {@code AGE-MOEA-II}: incrementam \(N\) ímpar em
+     * {@code WFGStudy.buildAGEMOEA/buildAGE2} ({@code if (populationSize % 2 != 0)
      *       populationSize++}) \(\implies \{100, 92, 210, 156, 276, 136\}\);
-     *   <li>{@code MOEA/DD}, {@code FDEA} e {@code RVEA}: preservam exatamente \(N_{\text{config}}(m)
-     *       \in \{100, 91, 210, 156, 275, 135\}\).
+     * <li>{@code MOEA/DD}, {@code FDEA} e {@code RVEA}: preservam exatamente
+     * \(N_{\text{config}}(m)
+     * \in \{100, 91, 210, 156, 275, 135\}\).
      * </ul>
      *
      * @param algorithmName nome canônico do algoritmo
-     * @param m número de objetivos
+     * @param m             número de objetivos
      * @return população interna alocada \(N_{\text{alloc}}(\text{alg}, m)\)
      */
     public static int getAllocatedPopulationSize(String algorithmName, int m) {
@@ -443,7 +492,8 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Retorna o tamanho de lote de descendentes gerados e avaliados por geração completa em regime
+     * Retorna o tamanho de lote de descendentes gerados e avaliados por geração
+     * completa em regime
      * estacionário (sem truncamento de fronteira) por algoritmo e \(m\).
      */
     public static int getOffspringBatchSize(String algorithmName, int m) {
@@ -452,17 +502,18 @@ public class EvaluationBudgetProblem implements DoubleProblem {
         return switch (canonical) {
             case "MOEA/DD" -> 1; // steady-state: 1 filho avaliado por passo interno (N passos por permutação)
             case "NSGA-III", "AGE-MOEA", "AGE-MOEA-II", "FDEA", "RVEA" ->
-                    getAllocatedPopulationSize(canonical, m);
+                getAllocatedPopulationSize(canonical, m);
             default -> throw new IllegalArgumentException(
                     "Algoritmo não suportado: " + algorithmName);
         };
     }
 
     /**
-     * Retorna o orçamento alvo canônico \(B_{\text{target}}(m, \text{problem}) = N_{\text{config}}(m)
+     * Retorna o orçamento alvo canônico \(B_{\text{target}}(m, \text{problem}) =
+     * N_{\text{config}}(m)
      * \times G_{\max}(m, \text{problem})\).
      *
-     * @param m número de objetivos
+     * @param m           número de objetivos
      * @param problemName nome do problema (ex.: {@code "WFG1"}, {@code "DTLZ1"})
      * @return orçamento alvo \(B_{\text{target}}\)
      */
@@ -474,12 +525,15 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Calcula o número de gerações/iterações inteiras \(\lfloor B / N_{\text{alloc}} \rfloor\) que
-     * cabem dentro de um orçamento alvo \(B\) sem excedê-lo quando cada geração (incluindo a
+     * Calcula o número de gerações/iterações inteiras \(\lfloor B /
+     * N_{\text{alloc}} \rfloor\) que
+     * cabem dentro de um orçamento alvo \(B\) sem excedê-lo quando cada geração
+     * (incluindo a
      * inicialização como iteração 1) consome \(N_{\text{alloc}}\) avaliações.
      *
-     * @param targetBudget orçamento alvo \(B\)
-     * @param effectivePopulationSize tamanho efetivo da população \(N_{\text{alloc}}\)
+     * @param targetBudget            orçamento alvo \(B\)
+     * @param effectivePopulationSize tamanho efetivo da população
+     *                                \(N_{\text{alloc}}\)
      * @return \(\max(1, \lfloor B / N_{\text{alloc}} \rfloor)\)
      */
     public static int computeMaxFullGenerationsWithinBudget(
@@ -492,13 +546,18 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Calcula o número de iterações (\(\lceil B / N_{\text{alloc}} \rceil\)) necessárias para que um
-     * algoritmo baseado em {@code maxIterations} (onde {@code iterations} inicia em 1 após a
-     * população inicial) alcance pelo menos {@code targetBudget} avaliações antes que o
-     * {@link BudgetContractEvaluator} trunque o lote final parcial em exatamente {@code targetBudget}.
+     * Calcula o número de iterações (\(\lceil B / N_{\text{alloc}} \rceil\))
+     * necessárias para que um
+     * algoritmo baseado em {@code maxIterations} (onde {@code iterations} inicia em
+     * 1 após a
+     * população inicial) alcance pelo menos {@code targetBudget} avaliações antes
+     * que o
+     * {@link BudgetContractEvaluator} trunque o lote final parcial em exatamente
+     * {@code targetBudget}.
      *
-     * @param targetBudget orçamento alvo \(B\)
-     * @param effectivePopulationSize tamanho efetivo da população \(N_{\text{alloc}}\)
+     * @param targetBudget            orçamento alvo \(B\)
+     * @param effectivePopulationSize tamanho efetivo da população
+     *                                \(N_{\text{alloc}}\)
      * @return \(\max(1, \lceil B / N_{\text{alloc}} \rceil)\)
      */
     public static int computeExactGenerationsForBudget(
@@ -512,45 +571,68 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Calcula matematicamente o total exato de chamadas a {@code Problem.evaluate} que cada
-     * algoritmo realiza para um dado orçamento solicitado \(B_{\text{req}}\) e número de gerações
-     * configurado \(G_{\text{req}}\) **sem** imposição externa de orçamento (comportamento nativo do
+     * Calcula matematicamente o total exato de chamadas a {@code Problem.evaluate}
+     * que cada
+     * algoritmo realiza para um dado orçamento solicitado \(B_{\text{req}}\) e
+     * número de gerações
+     * configurado \(G_{\text{req}}\) **sem** imposição externa de orçamento
+     * (comportamento nativo do
      * jMetal 7.8 + {@code WFGStudy.java} atual):
      *
      * <ul>
-     *   <li>{@code NSGA-III}: avalia \(N_{\text{alloc}} = 4\lceil N_{\text{config}}/4 \rceil\) na
-     *       inicialização ({@code iterations = 1}) e mais \(N_{\text{alloc}}\) por iteração até
-     *       {@code iterations >= maxIterations}, resultando em \(N_{\text{alloc}} \times
-     *       \max(1, G_{\text{req}})\).
-     *   <li>{@code AGE-MOEA} e {@code AGE-MOEA-II}: avaliam \(N_{\text{alloc}} = 2\lceil
-     *       N_{\text{config}}/2 \rceil\) na inicialização ({@code iterations = 1}) e mais
-     *       \(N_{\text{alloc}}\) por iteração até {@code iterations >= maxIterations}, resultando em
-     *       \(N_{\text{alloc}} \times \max(1, G_{\text{req}})\).
-     *   <li>{@code MOEA/DD}: avalia \(N_{\text{config}}\) na inicialização e depois executa um laço
-     *       {@code do-while (evaluations < maxEvaluations)} onde cada passo externo percorre uma
-     *       permutação completa de \(N_{\text{config}}\) subproblemas (1 avaliação por subproblema)
-     *       e só verifica {@code evaluations < maxEvaluations} ao final do lote de
-     *       \(N_{\text{config}}\) subproblemas! Portanto, avalia sempre pelo menos \(2
-     *       N_{\text{config}}\) soluções e arredonda qualquer \(B_{\text{req}} > 2 N_{\text{config}}\)
-     *       para o próximo múltiplo de \(N_{\text{config}}\): \(\max(2 N_{\text{config}}, \lceil
-     *       B_{\text{req}} / N_{\text{config}} \rceil \times N_{\text{config}})\).
-     *   <li>{@code FDEA}: avalia \(N_{\text{config}}\) na inicialização e depois, enquanto
-     *       {@code evaluations < maxEvaluations && generations < maxGenerations}, gera filhos
-     *       individualmente verificando {@code evaluations < maxEvaluations} a cada filho; logo,
-     *       realiza exatamente \(\max(N_{\text{config}}, \min(B_{\text{req}}, G_{\text{req}} \times
-     *       N_{\text{config}}))\) avaliações.
-     *   <li>{@code RVEA}: avalia \(N_{\text{config}}\) na inicialização ({@code evaluations = N}) e,
-     *       enquanto {@code evaluations < maxEvaluations}, gera e avalia um lote inteiro de
-     *       \(N_{\text{config}}\) filhos por geração antes de verificar a terminação; logo, realiza
-     *       \(\max(N_{\text{config}}, \lceil B_{\text{req}} / N_{\text{config}} \rceil \times
-     *       N_{\text{config}})\) avaliações.
+     * <li>{@code NSGA-III}: avalia \(N_{\text{alloc}} = 4\lceil N_{\text{config}}/4
+     * \rceil\) na
+     * inicialização ({@code iterations = 1}) e mais \(N_{\text{alloc}}\) por
+     * iteração até
+     * {@code iterations >= maxIterations}, resultando em \(N_{\text{alloc}} \times
+     * \max(1, G_{\text{req}})\).
+     * <li>{@code AGE-MOEA} e {@code AGE-MOEA-II}: avaliam \(N_{\text{alloc}} =
+     * 2\lceil
+     * N_{\text{config}}/2 \rceil\) na inicialização ({@code iterations = 1}) e mais
+     * \(N_{\text{alloc}}\) por iteração até {@code iterations >= maxIterations},
+     * resultando em
+     * \(N_{\text{alloc}} \times \max(1, G_{\text{req}})\).
+     * <li>{@code MOEA/DD}: avalia \(N_{\text{config}}\) na inicialização e depois
+     * executa um laço
+     * {@code do-while (evaluations < maxEvaluations)} onde cada passo externo
+     * percorre uma
+     * permutação completa de \(N_{\text{config}}\) subproblemas (1 avaliação por
+     * subproblema)
+     * e só verifica {@code evaluations < maxEvaluations} ao final do lote de
+     * \(N_{\text{config}}\) subproblemas! Portanto, avalia sempre pelo menos \(2
+     * N_{\text{config}}\) soluções e arredonda qualquer \(B_{\text{req}} > 2
+     * N_{\text{config}}\)
+     * para o próximo múltiplo de \(N_{\text{config}}\): \(\max(2 N_{\text{config}},
+     * \lceil
+     * B_{\text{req}} / N_{\text{config}} \rceil \times N_{\text{config}})\).
+     * <li>{@code FDEA}: avalia \(N_{\text{config}}\) na inicialização e depois,
+     * enquanto
+     * {@code evaluations < maxEvaluations && generations < maxGenerations}, gera
+     * filhos
+     * individualmente verificando {@code evaluations < maxEvaluations} a cada
+     * filho; logo,
+     * realiza exatamente \(\max(N_{\text{config}}, \min(B_{\text{req}},
+     * G_{\text{req}} \times
+     * N_{\text{config}}))\) avaliações.
+     * <li>{@code RVEA}: avalia \(N_{\text{config}}\) na inicialização
+     * ({@code evaluations = N}) e,
+     * enquanto {@code evaluations < maxEvaluations}, gera e avalia um lote inteiro
+     * de
+     * \(N_{\text{config}}\) filhos por geração antes de verificar a terminação;
+     * logo, realiza
+     * \(\max(N_{\text{config}}, \lceil B_{\text{req}} / N_{\text{config}} \rceil
+     * \times
+     * N_{\text{config}})\) avaliações.
      * </ul>
      *
-     * @param algorithmName nome do algoritmo
-     * @param m número de objetivos
-     * @param requestedGenerations número de gerações configurado (\(G_{\text{req}}\))
-     * @param requestedMaxEvaluations orçamento de avaliações configurado (\(B_{\text{req}}\))
-     * @return número exato de chamadas a {@code Problem.evaluate} no estado nativo atual
+     * @param algorithmName           nome do algoritmo
+     * @param m                       número de objetivos
+     * @param requestedGenerations    número de gerações configurado
+     *                                (\(G_{\text{req}}\))
+     * @param requestedMaxEvaluations orçamento de avaliações configurado
+     *                                (\(B_{\text{req}}\))
+     * @return número exato de chamadas a {@code Problem.evaluate} no estado nativo
+     *         atual
      */
     public static int predictUnconstrainedEvaluations(
             String algorithmName, int m, int requestedGenerations, int requestedMaxEvaluations) {
@@ -670,7 +752,9 @@ public class EvaluationBudgetProblem implements DoubleProblem {
                 yield builder.build();
             }
             case "MOEA/DD" -> {
-                WFGStudy.validateMoeadWeightFile("MOEAD_Weights", budgetProblem, nConfig);
+                String effectiveDataDir = WFGStudy.resolveMoeadDataDirectory(
+                        WFGStudy.getWeightsDirectory(), budgetProblem.numberOfObjectives(), nConfig, "MOEADD");
+                WFGStudy.validateMoeadWeightFile(effectiveDataDir, budgetProblem, nConfig, "MOEADD");
                 MOEADBuilder builder =
                         new MOEADBuilder(budgetProblem, MOEADBuilder.Variant.MOEADD)
                                 .setCrossover(crossover)
@@ -681,7 +765,7 @@ public class EvaluationBudgetProblem implements DoubleProblem {
                                 .setNeighborhoodSelectionProbability(0.9)
                                 .setMaximumNumberOfReplacedSolutions(2)
                                 .setNeighborSize(20)
-                                .setDataDirectory("MOEAD_Weights")
+                                .setDataDirectory(effectiveDataDir)
                                 .setFunctionType(AbstractMOEAD.FunctionType.PBI);
                 yield builder.build();
             }
@@ -729,7 +813,8 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Normaliza as diferentes grafias de nomes dos 6 algoritmos principais para o identificador
+     * Normaliza as diferentes grafias de nomes dos 6 algoritmos principais para o
+     * identificador
      * canônico usado nos relatórios da Fase 3.
      */
     public static String normalizeAlgorithmName(String algorithmName) {

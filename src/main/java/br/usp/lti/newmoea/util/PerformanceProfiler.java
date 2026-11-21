@@ -71,38 +71,49 @@ import org.uma.jmetal.util.comparator.RankingAndCrowdingDistanceComparator;
 /**
  * Utilitário de instrumentação e avaliação reprodutível de desempenho (T09).
  *
- * <p>Emprega exclusivamente recursos nativos da JVM ({@link System#nanoTime()},
- * {@link ThreadMXBean}, {@link MemoryMXBean}, {@link MemoryPoolMXBean} e {@link Runtime})
- * para medir separadamente o tempo decorrido (wall-clock time), o tempo de CPU (CPU time)
- * e o uso de memória (heap usada, pico de heap, non-heap usada e limite máximo de heap)
- * na execução dos algoritmos e de cada etapa/indicador de qualidade, sem alterar a
+ * <p>
+ * Emprega exclusivamente recursos nativos da JVM ({@link System#nanoTime()},
+ * {@link ThreadMXBean}, {@link MemoryMXBean}, {@link MemoryPoolMXBean} e
+ * {@link Runtime})
+ * para medir separadamente o tempo decorrido (wall-clock time), o tempo de CPU
+ * (CPU time)
+ * e o uso de memória (heap usada, pico de heap, non-heap usada e limite máximo
+ * de heap)
+ * na execução dos algoritmos e de cada etapa/indicador de qualidade, sem
+ * alterar a
  * semântica científica do experimento.
  */
 public final class PerformanceProfiler {
 
-    /** Nome da propriedade JVM para habilitar perfilamento opcional em {@link WFGStudy} (desativado por padrão). */
+    /**
+     * Nome da propriedade JVM para habilitar perfilamento opcional em
+     * {@link WFGStudy} (desativado por padrão).
+     */
     public static final String PROFILE_PERFORMANCE_PROPERTY = "profilePerformance";
 
-    /** Nome da propriedade JVM para configurar o timeout máximo de uma análise de hipervolume em ms. */
+    /**
+     * Nome da propriedade JVM para configurar o timeout máximo de uma análise de
+     * hipervolume em ms.
+     */
     public static final String HV_TIMEOUT_MS_PROPERTY = "perf.hvTimeoutMs";
 
     /**
-     * Limite máximo padrão de 1 hora ({@code 3_600_000} ms = {@code Duration.ofHours(1)}) por
+     * Limite máximo padrão de 1 hora ({@code 3_600_000} ms =
+     * {@code Duration.ofHours(1)}) por
      * análise/cálculo individual de hipervolume ({@link PISAHypervolume},
-     * {@link NormalizedHypervolume} ou {@link WFGHypervolume}), prevenindo bloqueios indefinidos
+     * {@link NormalizedHypervolume} ou {@link WFGHypervolume}), prevenindo
+     * bloqueios indefinidos
      * em alta dimensionalidade.
      */
     public static final long DEFAULT_HV_TIMEOUT_MS = 3_600_000L;
 
     /** Caminho padrão para exportação dos resultados de desempenho em CSV. */
-    public static final Path DEFAULT_RESULTS_CSV_PATH =
-            Path.of("docs", "performance", "performance-results.csv");
+    public static final Path DEFAULT_RESULTS_CSV_PATH = Path.of("docs", "performance", "performance-results.csv");
 
     /** Cabeçalho mínimo obrigatório exigido em {@code tasks/task9.md}. */
-    public static final String CSV_HEADER =
-            "timestamp,problem,algorithm,m,population,max_evaluations,run,"
-                    + "algorithm_wall_ms,algorithm_cpu_ms,indicator,indicator_wall_ms,"
-                    + "indicator_cpu_ms,heap_used_mb,heap_peak_mb,solutions,reference_points";
+    public static final String CSV_HEADER = "timestamp,problem,algorithm,m,population,max_evaluations,run,"
+            + "algorithm_wall_ms,algorithm_cpu_ms,indicator,indicator_wall_ms,"
+            + "indicator_cpu_ms,heap_used_mb,heap_peak_mb,solutions,reference_points";
 
     /** Fator de conversão de bytes para megabytes (MiB, \(1024^2\)). */
     private static final double BYTES_PER_MB = 1024.0 * 1024.0;
@@ -110,7 +121,9 @@ public final class PerformanceProfiler {
     /** Fator de conversão de nanossegundos para milissegundos (\(10^6\)). */
     private static final double NANOS_PER_MS = 1_000_000.0;
 
-    /** Identificadores padronizados das etapas/indicadores medidos separadamente. */
+    /**
+     * Identificadores padronizados das etapas/indicadores medidos separadamente.
+     */
     public static final String STAGE_FRONT_LOAD = "FRONT_LOAD";
     public static final String STAGE_NORMALIZATION = "NORMALIZATION";
     public static final String STAGE_PISA_HV = "PISAHypervolume";
@@ -124,7 +137,8 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Verifica se o perfilamento opcional de desempenho está habilitado via propriedade de sistema
+     * Verifica se o perfilamento opcional de desempenho está habilitado via
+     * propriedade de sistema
      * {@code -DprofilePerformance=true} (desativado por padrão).
      *
      * @return {@code true} somente se {@code -DprofilePerformance=true}
@@ -134,16 +148,22 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Instantâneo diferenciado de memória da JVM, separando memória heap usada atual,
-     * pico de memória heap observado nos pools de heap, memória non-heap usada e limite
+     * Instantâneo diferenciado de memória da JVM, separando memória heap usada
+     * atual,
+     * pico de memória heap observado nos pools de heap, memória non-heap usada e
+     * limite
      * máximo configurado de heap.
      *
-     * @param heapUsedMb memória heap em uso no momento da coleta (MB)
+     * @param heapUsedMb      memória heap em uso no momento da coleta (MB)
      * @param heapCommittedMb memória heap comprometida pela JVM (MB)
-     * @param heapPeakMb soma dos picos de memória usada ({@link MemoryPoolMXBean#getPeakUsage()}) nos pools {@link MemoryType#HEAP} (MB)
-     * @param heapMaxMb limite máximo de memória heap configurado na JVM (MB)
-     * @param nonHeapUsedMb memória non-heap (Metaspace, CodeCache, Compressed Class Space) em uso (MB)
-     * @param nonHeapPeakMb soma dos picos de memória usada nos pools {@link MemoryType#NON_HEAP} (MB)
+     * @param heapPeakMb      soma dos picos de memória usada
+     *                        ({@link MemoryPoolMXBean#getPeakUsage()}) nos pools
+     *                        {@link MemoryType#HEAP} (MB)
+     * @param heapMaxMb       limite máximo de memória heap configurado na JVM (MB)
+     * @param nonHeapUsedMb   memória non-heap (Metaspace, CodeCache, Compressed
+     *                        Class Space) em uso (MB)
+     * @param nonHeapPeakMb   soma dos picos de memória usada nos pools
+     *                        {@link MemoryType#NON_HEAP} (MB)
      */
     public record MemorySnapshot(
             double heapUsedMb,
@@ -151,44 +171,58 @@ public final class PerformanceProfiler {
             double heapPeakMb,
             double heapMaxMb,
             double nonHeapUsedMb,
-            double nonHeapPeakMb) {}
+            double nonHeapPeakMb) {
+    }
 
     /**
      * Resultado de uma medição cronometrada isolada (com ou sem valor de retorno).
      *
-     * @param <T> tipo do resultado produzido pela operação medida
-     * @param result valor retornado pela operação medida
-     * @param wallTimeMs tempo decorrido (wall-clock time) em milissegundos (\(\ge 0\))
-     * @param cpuTimeMs tempo de CPU consumido em milissegundos (\(\ge 0\))
+     * @param <T>          tipo do resultado produzido pela operação medida
+     * @param result       valor retornado pela operação medida
+     * @param wallTimeMs   tempo decorrido (wall-clock time) em milissegundos (\(\ge
+     *                     0\))
+     * @param cpuTimeMs    tempo de CPU consumido em milissegundos (\(\ge 0\))
      * @param memoryBefore instantâneo de memória imediatamente antes da execução
-     * @param memoryAfter instantâneo de memória imediatamente após a execução (com pico atualizado)
+     * @param memoryAfter  instantâneo de memória imediatamente após a execução (com
+     *                     pico atualizado)
      */
     public record TimedMeasurement<T>(
             T result,
             double wallTimeMs,
             double cpuTimeMs,
             MemorySnapshot memoryBefore,
-            MemorySnapshot memoryAfter) {}
+            MemorySnapshot memoryAfter) {
+    }
 
     /**
-     * Linha estruturada correspondente ao formato CSV obrigatório de {@code tasks/task9.md}.
+     * Linha estruturada correspondente ao formato CSV obrigatório de
+     * {@code tasks/task9.md}.
      *
-     * @param timestamp carimbo de tempo ISO-8601 da medição
-     * @param problem nome do problema (ex.: {@code WFG4}, {@code DTLZ2})
-     * @param algorithm nome canônico do algoritmo (ex.: {@code NSGA-III}, {@code MOEA/DD}, {@code RVEA}, {@code AGE-MOEA}, {@code FDEA})
-     * @param m número de objetivos
-     * @param population tamanho da população configurado
-     * @param maxEvaluations orçamento máximo de avaliações configurado
-     * @param run índice da repetição (\(1 \dots R\))
-     * @param algorithmWallMs tempo de parede (wall-clock) da execução do algoritmo em ms
-     * @param algorithmCpuMs tempo de CPU da execução do algoritmo em ms
-     * @param indicator nome da etapa/indicador medido ({@code FRONT_LOAD}, {@code NORMALIZATION}, {@code PISAHypervolume}, {@code NormalizedHypervolume}, {@code IGD}, {@code IGD+}, {@code R2})
+     * @param timestamp       carimbo de tempo ISO-8601 da medição
+     * @param problem         nome do problema (ex.: {@code WFG4}, {@code DTLZ2})
+     * @param algorithm       nome canônico do algoritmo (ex.: {@code NSGA-III},
+     *                        {@code MOEA/DD}, {@code RVEA}, {@code AGE-MOEA},
+     *                        {@code FDEA})
+     * @param m               número de objetivos
+     * @param population      tamanho da população configurado
+     * @param maxEvaluations  orçamento máximo de avaliações configurado
+     * @param run             índice da repetição (\(1 \dots R\))
+     * @param algorithmWallMs tempo de parede (wall-clock) da execução do algoritmo
+     *                        em ms
+     * @param algorithmCpuMs  tempo de CPU da execução do algoritmo em ms
+     * @param indicator       nome da etapa/indicador medido ({@code FRONT_LOAD},
+     *                        {@code NORMALIZATION}, {@code PISAHypervolume},
+     *                        {@code NormalizedHypervolume}, {@code IGD},
+     *                        {@code IGD+}, {@code R2})
      * @param indicatorWallMs tempo de parede da etapa/indicador em ms
-     * @param indicatorCpuMs tempo de CPU da etapa/indicador em ms
-     * @param heapUsedMb memória heap usada após a etapa/indicador em MB
-     * @param heapPeakMb pico de memória heap observado durante a etapa/indicador em MB
-     * @param solutions número de soluções não dominadas avaliadas na frente produzida
-     * @param referencePoints tamanho (cardinalidade) da frente de referência utilizada
+     * @param indicatorCpuMs  tempo de CPU da etapa/indicador em ms
+     * @param heapUsedMb      memória heap usada após a etapa/indicador em MB
+     * @param heapPeakMb      pico de memória heap observado durante a
+     *                        etapa/indicador em MB
+     * @param solutions       número de soluções não dominadas avaliadas na frente
+     *                        produzida
+     * @param referencePoints tamanho (cardinalidade) da frente de referência
+     *                        utilizada
      */
     public record PerformanceRecord(
             String timestamp,
@@ -208,7 +242,10 @@ public final class PerformanceProfiler {
             int solutions,
             int referencePoints) {
 
-        /** Converte o registro em uma linha CSV formatada com ponto decimal invariante ({@link Locale#US}). */
+        /**
+         * Converte o registro em uma linha CSV formatada com ponto decimal invariante
+         * ({@link Locale#US}).
+         */
         public String toCsvLine() {
             return String.format(
                     Locale.US,
@@ -231,7 +268,10 @@ public final class PerformanceProfiler {
                     referencePoints);
         }
 
-        /** Faz o parse de uma linha CSV no formato padrão para {@link PerformanceRecord}. */
+        /**
+         * Faz o parse de uma linha CSV no formato padrão para
+         * {@link PerformanceRecord}.
+         */
         public static PerformanceRecord fromCsvLine(String csvLine) {
             if (csvLine == null || csvLine.isBlank()) {
                 throw new IllegalArgumentException("Linha CSV de desempenho não pode ser nula ou vazia.");
@@ -267,13 +307,14 @@ public final class PerformanceProfiler {
     /**
      * Resumo estatístico descritivo completo (sem remoção automática de outliers).
      *
-     * @param count número de observações (\(n \ge 1\))
-     * @param mean média aritmética
-     * @param stdDev desvio padrão amostral (\(s\), ou \(0.0\) se \(n = 1\))
-     * @param median mediana
-     * @param min valor mínimo observado
-     * @param max valor máximo observado
-     * @param rawValues cópia imutável dos valores brutos medidos (preservando outliers)
+     * @param count     número de observações (\(n \ge 1\))
+     * @param mean      média aritmética
+     * @param stdDev    desvio padrão amostral (\(s\), ou \(0.0\) se \(n = 1\))
+     * @param median    mediana
+     * @param min       valor mínimo observado
+     * @param max       valor máximo observado
+     * @param rawValues cópia imutável dos valores brutos medidos (preservando
+     *                  outliers)
      */
     public record DescriptiveStats(
             int count,
@@ -282,25 +323,36 @@ public final class PerformanceProfiler {
             double median,
             double min,
             double max,
-            List<Double> rawValues) {}
+            List<Double> rawValues) {
+    }
 
     /**
-     * Registro comparativo entre métodos de cálculo de hipervolume sobre a mesma frente de entrada,
+     * Registro comparativo entre métodos de cálculo de hipervolume sobre a mesma
+     * frente de entrada,
      * mesmo número de objetivos e mesmo ponto de referência.
      *
-     * @param problem problema de origem da frente
-     * @param m número de objetivos
-     * @param frontSize número de pontos na frente avaliada
-     * @param method identificador do método (ex.: {@code PISAHypervolume}, {@code WFGHypervolume}, {@code Hypervolume3D})
-     * @param exact verdadeiro se o algoritmo for matematicamente exato
-     * @param hvValue valor de hipervolume calculado
-     * @param referenceExactHv valor de hipervolume de referência exato ({@code PISAHypervolume})
-     * @param absError erro absoluto \(|\text{HV} - \text{HV}_{\text{ref}}|\)
-     * @param relError erro relativo \(|\text{HV} - \text{HV}_{\text{ref}}| / \max(|\text{HV}_{\text{ref}}|, 10^{-15})\)
-     * @param wallStats estatísticas de tempo de parede (ms) nas repetições
-     * @param cpuStats estatísticas de tempo de CPU (ms) nas repetições
-     * @param heapPeakMb pico de memória heap observado (MB)
-     * @param maxSpreadAcrossRuns maior diferença entre execuções repetidas do mesmo método (estabilidade/reprodutibilidade)
+     * @param problem             problema de origem da frente
+     * @param m                   número de objetivos
+     * @param frontSize           número de pontos na frente avaliada
+     * @param method              identificador do método (ex.:
+     *                            {@code PISAHypervolume}, {@code WFGHypervolume},
+     *                            {@code Hypervolume3D})
+     * @param exact               verdadeiro se o algoritmo for matematicamente
+     *                            exato
+     * @param hvValue             valor de hipervolume calculado
+     * @param referenceExactHv    valor de hipervolume de referência exato
+     *                            ({@code PISAHypervolume})
+     * @param absError            erro absoluto \(|\text{HV} -
+     *                            \text{HV}_{\text{ref}}|\)
+     * @param relError            erro relativo \(|\text{HV} -
+     *                            \text{HV}_{\text{ref}}| /
+     *                            \max(|\text{HV}_{\text{ref}}|, 10^{-15})\)
+     * @param wallStats           estatísticas de tempo de parede (ms) nas
+     *                            repetições
+     * @param cpuStats            estatísticas de tempo de CPU (ms) nas repetições
+     * @param heapPeakMb          pico de memória heap observado (MB)
+     * @param maxSpreadAcrossRuns maior diferença entre execuções repetidas do mesmo
+     *                            método (estabilidade/reprodutibilidade)
      */
     public record HypervolumeMethodComparison(
             String problem,
@@ -315,22 +367,28 @@ public final class PerformanceProfiler {
             DescriptiveStats wallStats,
             DescriptiveStats cpuStats,
             double heapPeakMb,
-            double maxSpreadAcrossRuns) {}
+            double maxSpreadAcrossRuns) {
+    }
 
     /**
-     * Avaliação quantitativa do overhead introduzido pela instrumentação JMX/nanoTime.
+     * Avaliação quantitativa do overhead introduzido pela instrumentação
+     * JMX/nanoTime.
      *
-     * @param iterations número de invocações medidas
-     * @param perCallWallMicros tempo médio de parede por captura completa de tempo + memória (em microssegundos)
-     * @param perCallCpuMicros tempo médio de CPU por captura completa de tempo + memória (em microssegundos)
+     * @param iterations        número de invocações medidas
+     * @param perCallWallMicros tempo médio de parede por captura completa de tempo
+     *                          + memória (em microssegundos)
+     * @param perCallCpuMicros  tempo médio de CPU por captura completa de tempo +
+     *                          memória (em microssegundos)
      */
     public record InstrumentationOverheadReport(
             int iterations,
             double perCallWallMicros,
-            double perCallCpuMicros) {}
+            double perCallCpuMicros) {
+    }
 
     /**
-     * Reinicia os contadores de pico de uso de todos os pools de memória gerenciados pela JVM
+     * Reinicia os contadores de pico de uso de todos os pools de memória
+     * gerenciados pela JVM
      * ({@link MemoryPoolMXBean#resetPeakUsage()}).
      */
     public static void resetMemoryPeakUsage() {
@@ -344,8 +402,10 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Captura um instantâneo diferenciado de memória da JVM (heap usada, heap comprometida,
-     * pico de heap nos pools {@link MemoryType#HEAP}, limite máximo de heap configurado,
+     * Captura um instantâneo diferenciado de memória da JVM (heap usada, heap
+     * comprometida,
+     * pico de heap nos pools {@link MemoryType#HEAP}, limite máximo de heap
+     * configurado,
      * non-heap usada e pico de non-heap nos pools {@link MemoryType#NON_HEAP}).
      *
      * @return {@link MemorySnapshot} com valores em MB (MiB)
@@ -387,7 +447,8 @@ public final class PerformanceProfiler {
 
     /**
      * Retorna o tempo de CPU acumulado da thread atual em nanossegundos
-     * ({@link ThreadMXBean#getCurrentThreadCpuTime()}), ou {@code 0L} se não suportado.
+     * ({@link ThreadMXBean#getCurrentThreadCpuTime()}), ou {@code 0L} se não
+     * suportado.
      *
      * @return tempo de CPU da thread atual em nanossegundos
      */
@@ -408,8 +469,10 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Retorna um mapa com o tempo de CPU (em nanossegundos) de todas as threads vivas da JVM.
-     * Permite medir o consumo total de CPU mesmo quando uma tarefa utiliza múltiplas threads.
+     * Retorna um mapa com o tempo de CPU (em nanossegundos) de todas as threads
+     * vivas da JVM.
+     * Permite medir o consumo total de CPU mesmo quando uma tarefa utiliza
+     * múltiplas threads.
      *
      * @return mapa {@code threadId -> cpuTimeNanos}
      */
@@ -437,11 +500,12 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Calcula o tempo total de CPU (em nanossegundos) consumido entre dois snapshots de threads,
+     * Calcula o tempo total de CPU (em nanossegundos) consumido entre dois
+     * snapshots de threads,
      * garantindo que o valor nunca seja inferior ao delta de CPU da thread atual.
      *
-     * @param before snapshot antes da execução
-     * @param after snapshot após a execução
+     * @param before                  snapshot antes da execução
+     * @param after                   snapshot após a execução
      * @param currentThreadDeltaNanos delta de CPU da thread principal da medição
      * @return tempo de CPU total em nanossegundos (\(\ge 0\))
      */
@@ -460,14 +524,19 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Mede separadamente o tempo decorrido (wall-clock time), o tempo de CPU e o uso/pico de
-     * memória de uma operação síncrona ou multi-thread fornecida via {@link Supplier}.
+     * Mede separadamente o tempo decorrido (wall-clock time), o tempo de CPU e o
+     * uso/pico de
+     * memória de uma operação síncrona ou multi-thread fornecida via
+     * {@link Supplier}.
      *
-     * @param <T> tipo do resultado da operação
-     * @param task operação a ser executada e medida
-     * @param includeAllJvmThreads se {@code true}, soma o delta de CPU de todas as threads ativas;
-     *     se {@code false}, mede estritamente {@link ThreadMXBean#getCurrentThreadCpuTime()}
-     * @return {@link TimedMeasurement} contendo resultado, tempos e snapshots de memória
+     * @param <T>                  tipo do resultado da operação
+     * @param task                 operação a ser executada e medida
+     * @param includeAllJvmThreads se {@code true}, soma o delta de CPU de todas as
+     *                             threads ativas;
+     *                             se {@code false}, mede estritamente
+     *                             {@link ThreadMXBean#getCurrentThreadCpuTime()}
+     * @return {@link TimedMeasurement} contendo resultado, tempos e snapshots de
+     *         memória
      */
     public static <T> TimedMeasurement<T> measureOperation(
             Supplier<T> task, boolean includeAllJvmThreads) {
@@ -475,8 +544,8 @@ public final class PerformanceProfiler {
         resetMemoryPeakUsage();
         MemorySnapshot memBefore = captureMemorySnapshot();
 
-        Map<Long, Long> allThreadsBefore =
-                includeAllJvmThreads ? snapshotAllThreadsCpuTimeNanos() : Collections.emptyMap();
+        Map<Long, Long> allThreadsBefore = includeAllJvmThreads ? snapshotAllThreadsCpuTimeNanos()
+                : Collections.emptyMap();
         long cpuStart = readCurrentThreadCpuTimeNanos();
         long wallStart = System.nanoTime();
 
@@ -484,29 +553,27 @@ public final class PerformanceProfiler {
 
         long wallEnd = System.nanoTime();
         long cpuEnd = readCurrentThreadCpuTimeNanos();
-        Map<Long, Long> allThreadsAfter =
-                includeAllJvmThreads ? snapshotAllThreadsCpuTimeNanos() : Collections.emptyMap();
+        Map<Long, Long> allThreadsAfter = includeAllJvmThreads ? snapshotAllThreadsCpuTimeNanos()
+                : Collections.emptyMap();
 
         MemorySnapshot memAfter = captureMemorySnapshot();
 
         long wallNanos = Math.max(0L, wallEnd - wallStart);
         long currentCpuNanos = Math.max(0L, cpuEnd - cpuStart);
-        long effectiveCpuNanos =
-                includeAllJvmThreads
-                        ? computeMultiThreadCpuDeltaNanos(
-                                allThreadsBefore, allThreadsAfter, currentCpuNanos)
-                        : currentCpuNanos;
+        long effectiveCpuNanos = includeAllJvmThreads
+                ? computeMultiThreadCpuDeltaNanos(
+                        allThreadsBefore, allThreadsAfter, currentCpuNanos)
+                : currentCpuNanos;
 
         double PeakHeapMb = Math.max(memBefore.heapPeakMb(), memAfter.heapPeakMb());
         double PeakNonHeapMb = Math.max(memBefore.nonHeapPeakMb(), memAfter.nonHeapPeakMb());
-        MemorySnapshot resolvedAfter =
-                new MemorySnapshot(
-                        memAfter.heapUsedMb(),
-                        memAfter.heapCommittedMb(),
-                        PeakHeapMb,
-                        memAfter.heapMaxMb(),
-                        memAfter.nonHeapUsedMb(),
-                        PeakNonHeapMb);
+        MemorySnapshot resolvedAfter = new MemorySnapshot(
+                memAfter.heapUsedMb(),
+                memAfter.heapCommittedMb(),
+                PeakHeapMb,
+                memAfter.heapMaxMb(),
+                memAfter.nonHeapUsedMb(),
+                PeakNonHeapMb);
 
         return new TimedMeasurement<>(
                 result,
@@ -517,9 +584,12 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Retorna o limite máximo de tempo (timeout em milissegundos) configurado para cada cálculo
-     * individual de hipervolume ({@link PISAHypervolume}, {@link NormalizedHypervolume} ou
-     * {@link WFGHypervolume}). Por padrão é {@link #DEFAULT_HV_TIMEOUT_MS} (1 hora = {@code 3_600_000} ms).
+     * Retorna o limite máximo de tempo (timeout em milissegundos) configurado para
+     * cada cálculo
+     * individual de hipervolume ({@link PISAHypervolume},
+     * {@link NormalizedHypervolume} ou
+     * {@link WFGHypervolume}). Por padrão é {@link #DEFAULT_HV_TIMEOUT_MS} (1 hora
+     * = {@code 3_600_000} ms).
      *
      * @return timeout máximo em milissegundos (\(\ge 1\))
      */
@@ -529,17 +599,22 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Mede separadamente o tempo decorrido (wall-clock time), o tempo de CPU da thread trabalhadora
-     * e o uso/pico de memória de uma operação sujeita a um limite máximo de tempo ({@code timeoutMs}),
-     * como o cálculo recursivo de {@link PISAHypervolume}, {@link NormalizedHypervolume} ou
-     * {@link WFGHypervolume}. Caso o tempo exceda {@code timeoutMs}, a execução é interrompida com
+     * Mede separadamente o tempo decorrido (wall-clock time), o tempo de CPU da
+     * thread trabalhadora
+     * e o uso/pico de memória de uma operação sujeita a um limite máximo de tempo
+     * ({@code timeoutMs}),
+     * como o cálculo recursivo de {@link PISAHypervolume},
+     * {@link NormalizedHypervolume} ou
+     * {@link WFGHypervolume}. Caso o tempo exceda {@code timeoutMs}, a execução é
+     * interrompida com
      * segurança sem bloquear a JVM indefinidamente.
      *
-     * @param <T> tipo do resultado da operação
-     * @param task operação a ser executada e medida
-     * @param timeoutMs limite máximo de espera em milissegundos
+     * @param <T>           tipo do resultado da operação
+     * @param task          operação a ser executada e medida
+     * @param timeoutMs     limite máximo de espera em milissegundos
      * @param fallbackValue valor retornado caso ocorra timeout
-     * @return {@link TimedMeasurement} contendo resultado (ou {@code fallbackValue}), tempos e memória
+     * @return {@link TimedMeasurement} contendo resultado (ou
+     *         {@code fallbackValue}), tempos e memória
      */
     public static <T> TimedMeasurement<T> measureOperationWithTimeout(
             Supplier<T> task, long timeoutMs, T fallbackValue) {
@@ -556,21 +631,20 @@ public final class PerformanceProfiler {
         long wallStart = System.nanoTime();
 
         CompletableFuture<T> future = new CompletableFuture<>();
-        Thread worker =
-                new Thread(
-                        () -> {
-                            workerThreadId.set(Thread.currentThread().threadId());
-                            workerCpuStart.set(readCurrentThreadCpuTimeNanos());
-                            try {
-                                T val = task.get();
-                                workerCpuEnd.set(readCurrentThreadCpuTimeNanos());
-                                future.complete(val);
-                            } catch (Throwable t) {
-                                workerCpuEnd.set(readCurrentThreadCpuTimeNanos());
-                                future.completeExceptionally(t);
-                            }
-                        },
-                        "PerformanceProfiler-HV-Worker");
+        Thread worker = new Thread(
+                () -> {
+                    workerThreadId.set(Thread.currentThread().threadId());
+                    workerCpuStart.set(readCurrentThreadCpuTimeNanos());
+                    try {
+                        T val = task.get();
+                        workerCpuEnd.set(readCurrentThreadCpuTimeNanos());
+                        future.complete(val);
+                    } catch (Throwable t) {
+                        workerCpuEnd.set(readCurrentThreadCpuTimeNanos());
+                        future.completeExceptionally(t);
+                    }
+                },
+                "PerformanceProfiler-HV-Worker");
         worker.setDaemon(true);
         worker.start();
 
@@ -612,14 +686,13 @@ public final class PerformanceProfiler {
         MemorySnapshot memAfter = captureMemorySnapshot();
         double peakHeapMb = Math.max(memBefore.heapPeakMb(), memAfter.heapPeakMb());
         double peakNonHeapMb = Math.max(memBefore.nonHeapPeakMb(), memAfter.nonHeapPeakMb());
-        MemorySnapshot resolvedAfter =
-                new MemorySnapshot(
-                        memAfter.heapUsedMb(),
-                        memAfter.heapCommittedMb(),
-                        peakHeapMb,
-                        memAfter.heapMaxMb(),
-                        memAfter.nonHeapUsedMb(),
-                        peakNonHeapMb);
+        MemorySnapshot resolvedAfter = new MemorySnapshot(
+                memAfter.heapUsedMb(),
+                memAfter.heapCommittedMb(),
+                peakHeapMb,
+                memAfter.heapMaxMb(),
+                memAfter.nonHeapUsedMb(),
+                peakNonHeapMb);
 
         return new TimedMeasurement<>(
                 result,
@@ -634,7 +707,8 @@ public final class PerformanceProfiler {
      * ({@link #measureOperation(Supplier, boolean)} com operação vazia).
      *
      * @param iterations número de iterações (ex.: {@code 1000})
-     * @return {@link InstrumentationOverheadReport} com o custo médio por chamada em microssegundos
+     * @return {@link InstrumentationOverheadReport} com o custo médio por chamada
+     *         em microssegundos
      */
     public static InstrumentationOverheadReport evaluateInstrumentationOverhead(int iterations) {
         if (iterations <= 0) {
@@ -659,7 +733,8 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Calcula estatísticas descritivas completas (média, desvio padrão amostral, mediana,
+     * Calcula estatísticas descritivas completas (média, desvio padrão amostral,
+     * mediana,
      * mínimo e máximo) sem remover outliers.
      *
      * @param values lista de valores observados (não nula e não vazia)
@@ -690,22 +765,23 @@ public final class PerformanceProfiler {
             varianceSum += diff * diff;
         }
         double stdDev = (n > 1) ? Math.sqrt(varianceSum / (n - 1)) : 0.0;
-        double median =
-                (n % 2 == 1)
-                        ? sorted[n / 2]
-                        : 0.5 * (sorted[(n / 2) - 1] + sorted[n / 2]);
+        double median = (n % 2 == 1)
+                ? sorted[n / 2]
+                : 0.5 * (sorted[(n / 2) - 1] + sorted[n / 2]);
         double min = sorted[0];
         double max = sorted[n - 1];
         return new DescriptiveStats(n, mean, stdDev, median, min, max, rawCopy);
     }
 
     /**
-     * Instancia o problema multiobjetivo correspondente ao nome canônico ({@code WFG1}–{@code WFG9}
-     * ou {@code DTLZ1}–{@code DTLZ7}) e número de objetivos \(m\), seguindo exatamente a parametrização
+     * Instancia o problema multiobjetivo correspondente ao nome canônico
+     * ({@code WFG1}–{@code WFG9}
+     * ou {@code DTLZ1}–{@code DTLZ7}) e número de objetivos \(m\), seguindo
+     * exatamente a parametrização
      * de {@link WFGStudy} (\(k = 2(m - 1)\) e \(L = 20\)).
      *
      * @param problemName nome do problema (ex.: {@code "WFG4"}, {@code "DTLZ2"})
-     * @param m número de objetivos (\(m \ge 2\))
+     * @param m           número de objetivos (\(m \ge 2\))
      * @return instância de {@link Problem}
      */
     public static Problem<DoubleSolution> createProblem(String problemName, int m) {
@@ -734,16 +810,20 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Instancia um algoritmo do estudo para o problema e número de objetivos informados,
+     * Instancia um algoritmo do estudo para o problema e número de objetivos
+     * informados,
      * utilizando exatamente os operadores canônicos (\(\text{SBX}(1.0, 30.0)\) e
-     * \(\text{PM}(1/n, 20.0)\)) e o orçamento padrão de {@link StaticParams#getMaxGenerations(int, String)}
+     * \(\text{PM}(1/n, 20.0)\)) e o orçamento padrão de
+     * {@link StaticParams#getMaxGenerations(int, String)}
      * (via builders de {@link WFGStudy}).
      *
-     * @param algorithmName nome do algoritmo ({@code "NSGA-III"}, {@code "MOEA/DD"}, {@code "RVEA"}, {@code "AGE-MOEA"}, {@code "AGE-MOEA-II"} ou {@code "FDEA"})
-     * @param problem problema multiobjetivo
+     * @param algorithmName nome do algoritmo ({@code "NSGA-III"},
+     *                      {@code "MOEA/DD"}, {@code "RVEA"}, {@code "AGE-MOEA"},
+     *                      {@code "AGE-MOEA-II"} ou {@code "FDEA"})
+     * @param problem       problema multiobjetivo
      * @return instância configurada de {@link Algorithm}
      */
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings({ "unchecked", "rawtypes" })
     public static Algorithm<List<DoubleSolution>> createStandardAlgorithm(
             String algorithmName, Problem<DoubleSolution> problem) {
         Objects.requireNonNull(algorithmName, "O nome do algoritmo não pode ser nulo.");
@@ -751,17 +831,16 @@ public final class PerformanceProfiler {
         int m = problem.numberOfObjectives();
         int populationSize = StaticParams.getPopulationSize(m);
         CrossoverOperator<DoubleSolution> crossover = new SBXCrossover(1.0, 30.0);
-        MutationOperator<DoubleSolution> mutation =
-                new PolynomialMutation(1.0 / problem.numberOfVariables(), 20.0);
+        MutationOperator<DoubleSolution> mutation = new PolynomialMutation(1.0 / problem.numberOfVariables(), 20.0);
 
         String normalizedAlg = algorithmName.trim().toUpperCase(Locale.ROOT);
         return switch (normalizedAlg) {
             case "NSGA-III", "NSGAIII" ->
-                    WFGStudy.buildNSGAIII(problem, populationSize, crossover, mutation);
+                WFGStudy.buildNSGAIII(problem, populationSize, crossover, mutation);
             case "MOEA/DD", "MOEADD" ->
-                    WFGStudy.buildMOEADD(problem, populationSize, crossover, mutation);
+                WFGStudy.buildMOEADD(problem, populationSize, crossover, mutation);
             case "RVEA" ->
-                    WFGStudy.buildRVEA(problem, populationSize, crossover, mutation);
+                WFGStudy.buildRVEA(problem, populationSize, crossover, mutation);
             case "AGE-MOEA", "AGEMOEA" -> {
                 int evenPop = (populationSize % 2 != 0) ? populationSize + 1 : populationSize;
                 AGEMOEABuilder builder = new AGEMOEABuilder(problem);
@@ -783,8 +862,8 @@ public final class PerformanceProfiler {
             case "FDEA" -> {
                 int maxGenerations = StaticParams.getMaxGenerations(m, problem.name());
                 int maxEvaluations = maxGenerations * populationSize;
-                SelectionOperator selection =
-                        new BinaryTournamentSelection<>(new RankingAndCrowdingDistanceComparator<>());
+                SelectionOperator selection = new BinaryTournamentSelection<>(
+                        new RankingAndCrowdingDistanceComparator<>());
                 yield new FDEABuilder(problem)
                         .setPopulationSize(populationSize)
                         .setMaxGenerations(maxGenerations)
@@ -800,12 +879,14 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Filtra uma lista de soluções mantendo apenas as soluções mutuamente não dominadas
-     * (mesmo filtro aplicado pelo {@code ExecuteAlgorithms} / {@code ExperimentAlgorithm} do jMetal 7.8)
+     * Filtra uma lista de soluções mantendo apenas as soluções mutuamente não
+     * dominadas
+     * (mesmo filtro aplicado pelo {@code ExecuteAlgorithms} /
+     * {@code ExperimentAlgorithm} do jMetal 7.8)
      * e converte seus vetores de objetivos para uma matriz {@code double[N][m]}.
      *
      * @param solutions lista de soluções retornada por {@code algorithm.result()}
-     * @param m número esperado de objetivos
+     * @param m         número esperado de objetivos
      * @return matriz {@code double[N_nd][m]} contendo as soluções não dominadas
      */
     public static double[][] extractNonDominatedFrontMatrix(
@@ -813,8 +894,7 @@ public final class PerformanceProfiler {
         if (solutions == null || solutions.isEmpty()) {
             return new double[0][m];
         }
-        NonDominatedSolutionListArchive<DoubleSolution> archive =
-                new NonDominatedSolutionListArchive<>();
+        NonDominatedSolutionListArchive<DoubleSolution> archive = new NonDominatedSolutionListArchive<>();
         for (DoubleSolution sol : solutions) {
             archive.add(sol);
         }
@@ -828,57 +908,71 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Resolve o caminho do arquivo CSV da frente de referência para o problema e dimensão \(m\)
+     * Resolve o caminho do arquivo CSV da frente de referência para o problema e
+     * dimensão \(m\)
      * seguindo a hierarquia canônica:
      * 1. {@code resources/referenceFronts/<PROBLEM>.<m>D.csv};
      * 2. {@code resources/referenceFronts/pf_gen/<PROBLEM>.<m>D.csv};
      * 3. Fallback legado {@code pareto_fronts/csv/<PROBLEM>.<m>D.csv}.
      *
      * @param problemName nome do problema (ex.: {@code "WFG4"}, {@code "DTLZ2"})
-     * @param m número de objetivos
+     * @param m           número de objetivos
      * @return {@link Path} para o arquivo CSV resolvido
      */
+    /**
+     * Resolve o caminho do arquivo de frente de referência delegando exclusivamente
+     * à autoridade canônica
+     * {@link ParetoFrontValidator#resolveCanonicalReferenceFront}.
+     *
+     * @param problemName nome canônico ou alternativo do problema (ex.: "WFG1",
+     *                    "DTLZ2")
+     * @param m           número de objetivos
+     * @return {@link Path} apontando para o arquivo de frente resolvido
+     */
     public static Path resolveReferenceFrontPath(String problemName, int m) {
-        String canonical = StaticParams.normalizeProblemId(problemName);
-        String fileName = canonical + "." + m + "D.csv";
-        Path canonicalPath = Path.of("resources", "referenceFronts", fileName);
-        if (Files.exists(canonicalPath)) {
-            return canonicalPath;
-        }
-        Path pfGenPath = Path.of("resources", "referenceFronts", "pf_gen", fileName);
-        if (Files.exists(pfGenPath)) {
-            return pfGenPath;
-        }
-        Path legacyPath = Path.of("pareto_fronts", "csv", fileName);
-        if (Files.exists(legacyPath)) {
-            return legacyPath;
-        }
-        throw new IllegalArgumentException(
-                "Frente de referência não encontrada na hierarquia canônica para "
-                        + canonical
-                        + " com m="
-                        + m);
+        return resolveReferenceFrontPath(problemName, m, null);
+    }
+
+    /**
+     * Resolve o caminho do arquivo de frente de referência para um algoritmo
+     * específico,
+     * aplicando o escopo granular da flag {@code -DreplaceZeroFronts}.
+     */
+    public static Path resolveReferenceFrontPath(String problemName, int m, String algorithmName) {
+        return ParetoFrontValidator.resolveCanonicalReferenceFront(
+                problemName,
+                m,
+                null,
+                null,
+                null,
+                algorithmName,
+                true);
     }
 
     /**
      * Executa e mede separadamente uma única repetição (`run`) de uma configuração
      * problema–algoritmo–\(m\), registrando:
      * <ol>
-     *   <li>Execução do algoritmo ({@code algorithm_wall_ms}, {@code algorithm_cpu_ms});</li>
-     *   <li>Leitura da frente de referência ({@link #STAGE_FRONT_LOAD});</li>
-     *   <li>Normalização da frente de referência e da frente aproximada ({@link #STAGE_NORMALIZATION});</li>
-     *   <li>Cálculo de {@link #STAGE_PISA_HV};</li>
-     *   <li>Cálculo de {@link #STAGE_NORMALIZED_HV};</li>
-     *   <li>Cálculo de {@link #STAGE_IGD};</li>
-     *   <li>Cálculo de {@link #STAGE_IGD_PLUS};</li>
-     *   <li>Cálculo de {@link #STAGE_R2}.</li>
+     * <li>Execução do algoritmo ({@code algorithm_wall_ms},
+     * {@code algorithm_cpu_ms});</li>
+     * <li>Leitura da frente de referência ({@link #STAGE_FRONT_LOAD});</li>
+     * <li>Normalização da frente de referência e da frente aproximada
+     * ({@link #STAGE_NORMALIZATION});</li>
+     * <li>Cálculo de {@link #STAGE_PISA_HV};</li>
+     * <li>Cálculo de {@link #STAGE_NORMALIZED_HV};</li>
+     * <li>Cálculo de {@link #STAGE_IGD};</li>
+     * <li>Cálculo de {@link #STAGE_IGD_PLUS};</li>
+     * <li>Cálculo de {@link #STAGE_R2}.</li>
      * </ol>
      *
-     * @param problemName nome do problema (ex.: {@code "WFG4"}, {@code "DTLZ2"})
-     * @param algorithmName nome do algoritmo (ex.: {@code "NSGA-III"}, {@code "MOEA/DD"}, {@code "RVEA"}, {@code "AGE-MOEA"}, {@code "FDEA"})
-     * @param m número de objetivos
-     * @param runIndex índice da repetição (\(1 \dots R\))
-     * @return lista de 7 {@link PerformanceRecord} (um por etapa/indicador, compartilhando a medição daquela execução do algoritmo)
+     * @param problemName   nome do problema (ex.: {@code "WFG4"}, {@code "DTLZ2"})
+     * @param algorithmName nome do algoritmo (ex.: {@code "NSGA-III"},
+     *                      {@code "MOEA/DD"}, {@code "RVEA"}, {@code "AGE-MOEA"},
+     *                      {@code "FDEA"})
+     * @param m             número de objetivos
+     * @param runIndex      índice da repetição (\(1 \dots R\))
+     * @return lista de 7 {@link PerformanceRecord} (um por etapa/indicador,
+     *         compartilhando a medição daquela execução do algoritmo)
      */
     public static List<PerformanceRecord> profileSingleConfigurationRun(
             String problemName, String algorithmName, int m, int runIndex) {
@@ -887,10 +981,9 @@ public final class PerformanceProfiler {
         int populationSize = StaticParams.getPopulationSize(m);
         int maxGenerations = StaticParams.getMaxGenerations(m, problem.name());
         int maxEvaluations = populationSize * maxGenerations;
-        Path refFrontPath = resolveReferenceFrontPath(canonicalProblem, m);
+        Path refFrontPath = resolveReferenceFrontPath(canonicalProblem, m, algorithmName);
 
-        Algorithm<List<DoubleSolution>> algorithm =
-                createStandardAlgorithm(algorithmName, problem);
+        Algorithm<List<DoubleSolution>> algorithm = createStandardAlgorithm(algorithmName, problem);
 
         return profileCustomAlgorithmRun(
                 canonicalProblem,
@@ -904,17 +997,18 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Executa e mede separadamente uma instância já construída de {@link Algorithm} e todas as
+     * Executa e mede separadamente uma instância já construída de {@link Algorithm}
+     * e todas as
      * 7 etapas de pós-processamento/indicadores sobre a frente resultante.
      *
-     * @param problemName identificador do problema
-     * @param algorithmName identificador do algoritmo
-     * @param m número de objetivos
+     * @param problemName    identificador do problema
+     * @param algorithmName  identificador do algoritmo
+     * @param m              número de objetivos
      * @param populationSize tamanho da população
      * @param maxEvaluations orçamento máximo de avaliações
-     * @param runIndex índice da repetição (\(\ge 1\))
-     * @param algorithm instância configurada do algoritmo a executar
-     * @param refFrontPath arquivo CSV da frente de referência
+     * @param runIndex       índice da repetição (\(\ge 1\))
+     * @param algorithm      instância configurada do algoritmo a executar
+     * @param refFrontPath   arquivo CSV da frente de referência
      * @return lista imutável de 7 {@link PerformanceRecord}
      */
     public static List<PerformanceRecord> profileCustomAlgorithmRun(
@@ -932,61 +1026,59 @@ public final class PerformanceProfiler {
         String timestamp = Instant.now().toString();
 
         // 1. Execução isolada do algoritmo
-        TimedMeasurement<List<DoubleSolution>> algMeasurement =
-                measureOperation(
-                        () -> {
-                            algorithm.run();
-                            return algorithm.result();
-                        },
-                        false);
+        TimedMeasurement<List<DoubleSolution>> algMeasurement = measureOperation(
+                () -> {
+                    algorithm.run();
+                    return algorithm.result();
+                },
+                false);
 
         double algWallMs = algMeasurement.wallTimeMs();
         double algCpuMs = algMeasurement.cpuTimeMs();
-        double[][] nonDominatedFront =
-                extractNonDominatedFrontMatrix(algMeasurement.result(), m);
+        double[][] nonDominatedFront = extractNonDominatedFrontMatrix(algMeasurement.result(), m);
         int solutionCount = nonDominatedFront.length;
 
         // 2. Etapa FRONT_LOAD: leitura da frente de referência a partir do disco
-        TimedMeasurement<double[][]> frontLoadMeasurement =
-                measureOperation(
-                        () -> {
-                            try {
-                                return VectorUtils.readVectors(refFrontPath.toString(), ",");
-                            } catch (IOException e) {
-                                throw new IllegalStateException(
-                                        "Falha ao ler frente de referência: " + refFrontPath, e);
-                            }
-                        },
-                        false);
+        TimedMeasurement<double[][]> frontLoadMeasurement = measureOperation(
+                () -> {
+                    try {
+                        return VectorUtils.readVectors(refFrontPath.toString(), ",");
+                    } catch (IOException e) {
+                        throw new IllegalStateException(
+                                "Falha ao ler frente de referência: " + refFrontPath, e);
+                    }
+                },
+                false);
 
         double[][] referenceFront = frontLoadMeasurement.result();
         int referencePointCount = referenceFront.length;
 
-        // 3. Etapa NORMALIZATION: normalização linear min-max da frente de referência e da frente obtida
-        record NormalizedFrontPair(double[][] normalizedRef, double[][] normalizedSolutionFront) {}
-        TimedMeasurement<NormalizedFrontPair> normMeasurement =
-                measureOperation(
-                        () -> {
-                            double[][] normRef = NormalizeUtils.normalize(referenceFront);
-                            double[] minValues =
-                                    NormalizeUtils.getMinValuesOfTheColumnsOfAMatrix(referenceFront);
-                            double[] maxValues =
-                                    NormalizeUtils.getMaxValuesOfTheColumnsOfAMatrix(referenceFront);
-                            double[][] normSol =
-                                    (nonDominatedFront.length > 0)
-                                            ? NormalizeUtils.normalize(
-                                                    nonDominatedFront, minValues, maxValues)
-                                            : new double[0][m];
-                            return new NormalizedFrontPair(normRef, normSol);
-                        },
-                        false);
+        // 3. Etapa NORMALIZATION: normalização linear min-max da frente de referência e
+        // da frente obtida
+        record NormalizedFrontPair(double[][] normalizedRef, double[][] normalizedSolutionFront) {
+        }
+        TimedMeasurement<NormalizedFrontPair> normMeasurement = measureOperation(
+                () -> {
+                    double[][] normRef = NormalizeUtils.normalize(referenceFront);
+                    double[] minValues = NormalizeUtils.getMinValuesOfTheColumnsOfAMatrix(referenceFront);
+                    double[] maxValues = NormalizeUtils.getMaxValuesOfTheColumnsOfAMatrix(referenceFront);
+                    double[][] normSol = (nonDominatedFront.length > 0)
+                            ? NormalizeUtils.normalize(
+                                    nonDominatedFront, minValues, maxValues)
+                            : new double[0][m];
+                    return new NormalizedFrontPair(normRef, normSol);
+                },
+                false);
 
         double[][] normalizedReferenceFront = normMeasurement.result().normalizedRef();
         double[][] normalizedSolutionFront = normMeasurement.result().normalizedSolutionFront();
 
-        // Em m >= 15, o algoritmo recursivo exato de PISAHypervolume apresenta complexidade O(N^{m/2});
-        // permite limitar opcionalmente o subconjunto da frente aproximada para HV quando -Dperf.maxHvFrontSize15D > 0,
-        // mantendo a frente de referência completa (135 pontos em WFG4.15D.csv, que é avaliada em ~50 ms e tem HV > 0)
+        // Em m >= 15, o algoritmo recursivo exato de PISAHypervolume apresenta
+        // complexidade O(N^{m/2});
+        // permite limitar opcionalmente o subconjunto da frente aproximada para HV
+        // quando -Dperf.maxHvFrontSize15D > 0,
+        // mantendo a frente de referência completa (135 pontos em WFG4.15D.csv, que é
+        // avaliada em ~50 ms e tem HV > 0)
         int maxHvFront15D = Integer.getInteger("perf.maxHvFrontSize15D", 0);
         double[][] hvSolutionFront = normalizedSolutionFront;
         if (m >= 15 && maxHvFront15D > 0 && hvSolutionFront.length > maxHvFront15D) {
@@ -996,66 +1088,61 @@ public final class PerformanceProfiler {
         final double[][] effectiveHvRefFront = normalizedReferenceFront;
         final long hvTimeoutMs = getHypervolumeTimeoutMs();
 
-        // 4. Etapa PISAHypervolume (protegida pelo limite máximo hvTimeoutMs, padrão 1h = 3.600.000 ms)
-        TimedMeasurement<Double> pisaHvMeasurement =
-                measureOperationWithTimeout(
-                        () -> {
-                            PISAHypervolume pisaHv = new PISAHypervolume();
-                            pisaHv.referenceFront(effectiveHvRefFront);
-                            return pisaHv.compute(effectiveHvSolFront);
-                        },
-                        hvTimeoutMs,
-                        Double.NaN);
+        // 4. Etapa PISAHypervolume (protegida pelo limite máximo hvTimeoutMs, padrão 1h
+        // = 3.600.000 ms)
+        TimedMeasurement<Double> pisaHvMeasurement = measureOperationWithTimeout(
+                () -> {
+                    PISAHypervolume pisaHv = new PISAHypervolume();
+                    pisaHv.referenceFront(effectiveHvRefFront);
+                    return pisaHv.compute(effectiveHvSolFront);
+                },
+                hvTimeoutMs,
+                Double.NaN);
 
-        // 5. Etapa NormalizedHypervolume (protegida pelo mesmo limite máximo hvTimeoutMs, pois chama PISAHypervolume internamente)
-        TimedMeasurement<Double> nhvMeasurement =
-                measureOperationWithTimeout(
-                        () -> {
-                            NormalizedHypervolume nhv = new NormalizedHypervolume();
-                            nhv.referenceFront(effectiveHvRefFront);
-                            return nhv.compute(effectiveHvSolFront);
-                        },
-                        hvTimeoutMs,
-                        Double.NaN);
+        // 5. Etapa NormalizedHypervolume (protegida pelo mesmo limite máximo
+        // hvTimeoutMs, pois chama PISAHypervolume internamente)
+        TimedMeasurement<Double> nhvMeasurement = measureOperationWithTimeout(
+                () -> {
+                    NormalizedHypervolume nhv = new NormalizedHypervolume();
+                    nhv.referenceFront(effectiveHvRefFront);
+                    return nhv.compute(effectiveHvSolFront);
+                },
+                hvTimeoutMs,
+                Double.NaN);
 
         // 6. Etapa IGD
-        TimedMeasurement<Double> igdMeasurement =
-                measureOperation(
-                        () -> {
-                            InvertedGenerationalDistance igd = new InvertedGenerationalDistance();
-                            igd.referenceFront(normalizedReferenceFront);
-                            return igd.compute(normalizedSolutionFront);
-                        },
-                        false);
+        TimedMeasurement<Double> igdMeasurement = measureOperation(
+                () -> {
+                    InvertedGenerationalDistance igd = new InvertedGenerationalDistance();
+                    igd.referenceFront(normalizedReferenceFront);
+                    return igd.compute(normalizedSolutionFront);
+                },
+                false);
 
         // 7. Etapa IGD+
-        TimedMeasurement<Double> igdPlusMeasurement =
-                measureOperation(
-                        () -> {
-                            InvertedGenerationalDistancePlus igdPlus =
-                                    new InvertedGenerationalDistancePlus();
-                            igdPlus.referenceFront(normalizedReferenceFront);
-                            return igdPlus.compute(normalizedSolutionFront);
-                        },
-                        false);
+        TimedMeasurement<Double> igdPlusMeasurement = measureOperation(
+                () -> {
+                    InvertedGenerationalDistancePlus igdPlus = new InvertedGenerationalDistancePlus();
+                    igdPlus.referenceFront(normalizedReferenceFront);
+                    return igdPlus.compute(normalizedSolutionFront);
+                },
+                false);
 
         // 8. Etapa R2 (com reset de weightVectors/idealPoint idêntico ao WFGStudy)
-        TimedMeasurement<Double> r2Measurement =
-                measureOperation(
-                        () -> {
-                            R2 r2 =
-                                    new R2() {
-                                        @Override
-                                        public void referenceFront(double[][] refFront) {
-                                            super.referenceFront(refFront);
-                                            setWeightVectors(null);
-                                            setIdealPoint(null);
-                                        }
-                                    };
-                            r2.referenceFront(normalizedReferenceFront);
-                            return r2.compute(normalizedSolutionFront);
-                        },
-                        false);
+        TimedMeasurement<Double> r2Measurement = measureOperation(
+                () -> {
+                    R2 r2 = new R2() {
+                        @Override
+                        public void referenceFront(double[][] refFront) {
+                            super.referenceFront(refFront);
+                            setWeightVectors(null);
+                            setIdealPoint(null);
+                        }
+                    };
+                    r2.referenceFront(normalizedReferenceFront);
+                    return r2.compute(normalizedSolutionFront);
+                },
+                false);
 
         List<PerformanceRecord> records = new ArrayList<>(7);
         records.add(
@@ -1168,14 +1255,16 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Executa uma bateria de medições para uma configuração problema–algoritmo–\(m\), precedida de
-     * execuções de warm-up (descartadas) e seguida de {@code measuredRuns} repetições medidas.
+     * Executa uma bateria de medições para uma configuração
+     * problema–algoritmo–\(m\), precedida de
+     * execuções de warm-up (descartadas) e seguida de {@code measuredRuns}
+     * repetições medidas.
      *
-     * @param problemName nome do problema
+     * @param problemName   nome do problema
      * @param algorithmName nome do algoritmo
-     * @param m número de objetivos
-     * @param warmupRuns número de execuções de aquecimento da JVM (\(\ge 0\))
-     * @param measuredRuns número de repetições medidas (\(\ge 1\))
+     * @param m             número de objetivos
+     * @param warmupRuns    número de execuções de aquecimento da JVM (\(\ge 0\))
+     * @param measuredRuns  número de repetições medidas (\(\ge 1\))
      * @return lista consolidada de {@link PerformanceRecord} das repetições medidas
      */
     public static List<PerformanceRecord> profileConfigurationSeries(
@@ -1202,16 +1291,20 @@ public final class PerformanceProfiler {
 
     /**
      * Compara os métodos de cálculo de hipervolume disponíveis no jMetal 7.8
-     * ({@link PISAHypervolume}, {@link WFGHypervolume} e, quando \(m = 3\), {@link Hypervolume3D})
-     * sobre exatamente a mesma frente normalizada em \([0, 1]^m\), mesmo número de objetivos \(m\)
+     * ({@link PISAHypervolume}, {@link WFGHypervolume} e, quando \(m = 3\),
+     * {@link Hypervolume3D})
+     * sobre exatamente a mesma frente normalizada em \([0, 1]^m\), mesmo número de
+     * objetivos \(m\)
      * e mesmo ponto de referência \((1.0, \dots, 1.0) \in \mathbb{R}^m\).
      *
-     * @param problem identificador do problema de origem da frente
-     * @param normalizedFront frente de entrada normalizada em \([0, 1]^m\) (não vazia)
-     * @param m número de objetivos
-     * @param warmupRuns número de repetições de warm-up (\(\ge 0\))
-     * @param repetitions número de repetições medidas (\(\ge 1\))
-     * @return lista de {@link HypervolumeMethodComparison} para cada método avaliado
+     * @param problem         identificador do problema de origem da frente
+     * @param normalizedFront frente de entrada normalizada em \([0, 1]^m\) (não
+     *                        vazia)
+     * @param m               número de objetivos
+     * @param warmupRuns      número de repetições de warm-up (\(\ge 0\))
+     * @param repetitions     número de repetições medidas (\(\ge 1\))
+     * @return lista de {@link HypervolumeMethodComparison} para cada método
+     *         avaliado
      */
     public static List<HypervolumeMethodComparison> compareHypervolumeMethods(
             String problem,
@@ -1238,33 +1331,31 @@ public final class PerformanceProfiler {
         }
 
         // 1. PISAHypervolume (referência exata do pipeline)
-        HypervolumeMethodComparison pisaComp =
-                benchmarkSingleHvMethod(
-                        problem,
-                        m,
-                        frontSize,
-                        "PISAHypervolume",
-                        true,
-                        () -> new PISAHypervolume(refPoint).compute(normalizedFront),
-                        Double.NaN,
-                        repetitions);
+        HypervolumeMethodComparison pisaComp = benchmarkSingleHvMethod(
+                problem,
+                m,
+                frontSize,
+                "PISAHypervolume",
+                true,
+                () -> new PISAHypervolume(refPoint).compute(normalizedFront),
+                Double.NaN,
+                repetitions);
 
         double referenceExactHv = pisaComp.hvValue();
-        HypervolumeMethodComparison resolvedPisaComp =
-                new HypervolumeMethodComparison(
-                        pisaComp.problem(),
-                        pisaComp.m(),
-                        pisaComp.frontSize(),
-                        pisaComp.method(),
-                        pisaComp.exact(),
-                        pisaComp.hvValue(),
-                        referenceExactHv,
-                        0.0,
-                        0.0,
-                        pisaComp.wallStats(),
-                        pisaComp.cpuStats(),
-                        pisaComp.heapPeakMb(),
-                        pisaComp.maxSpreadAcrossRuns());
+        HypervolumeMethodComparison resolvedPisaComp = new HypervolumeMethodComparison(
+                pisaComp.problem(),
+                pisaComp.m(),
+                pisaComp.frontSize(),
+                pisaComp.method(),
+                pisaComp.exact(),
+                pisaComp.hvValue(),
+                referenceExactHv,
+                0.0,
+                0.0,
+                pisaComp.wallStats(),
+                pisaComp.cpuStats(),
+                pisaComp.heapPeakMb(),
+                pisaComp.maxSpreadAcrossRuns());
 
         List<HypervolumeMethodComparison> results = new ArrayList<>();
         results.add(resolvedPisaComp);
@@ -1314,8 +1405,7 @@ public final class PerformanceProfiler {
         long hvTimeoutMs = getHypervolumeTimeoutMs();
 
         for (int r = 0; r < repetitions; r++) {
-            TimedMeasurement<Double> timed =
-                    measureOperationWithTimeout(hvSupplier, hvTimeoutMs, Double.NaN);
+            TimedMeasurement<Double> timed = measureOperationWithTimeout(hvSupplier, hvTimeoutMs, Double.NaN);
             wallTimes.add(timed.wallTimeMs());
             cpuTimes.add(timed.cpuTimeMs());
             hvValues.add(timed.result());
@@ -1346,12 +1436,14 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Escreve uma lista de {@link PerformanceRecord} em arquivo CSV UTF-8 com o cabeçalho mínimo
+     * Escreve uma lista de {@link PerformanceRecord} em arquivo CSV UTF-8 com o
+     * cabeçalho mínimo
      * exigido em {@code tasks/task9.md}.
      *
      * @param csvPath caminho de destino do arquivo CSV
      * @param records registros a exportar
-     * @param append se {@code true} e o arquivo já existir e não estiver vazio, anexa ao final sem repetir o cabeçalho
+     * @param append  se {@code true} e o arquivo já existir e não estiver vazio,
+     *                anexa ao final sem repetir o cabeçalho
      * @throws IOException se houver erro de I/O
      */
     public static void writeRecordsToCsv(
@@ -1422,29 +1514,33 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Executa o protocolo experimental padrão de avaliação de desempenho de T09 e salva os
+     * Executa o protocolo experimental padrão de avaliação de desempenho de T09 e
+     * salva os
      * resultados em {@code docs/performance/performance-results.csv}:
      * <ul>
-     *   <li>Algoritmos: {@code NSGA-III}, {@code MOEA/DD}, {@code RVEA} e {@code AGE-MOEA} (baseline);</li>
-     *   <li>Problemas e dimensões: {@code WFG4} (\(m \in \{3, 8, 15\}\)) e {@code DTLZ2} (\(m = 3\));</li>
-     *   <li>Warm-up prévio na JVM e {@code runs} repetições por configuração.</li>
+     * <li>Algoritmos: {@code NSGA-III}, {@code MOEA/DD}, {@code RVEA} e
+     * {@code AGE-MOEA} (baseline);</li>
+     * <li>Problemas e dimensões: {@code WFG4} (\(m \in \{3, 8, 15\}\)) e
+     * {@code DTLZ2} (\(m = 3\));</li>
+     * <li>Warm-up prévio na JVM e {@code runs} repetições por configuração.</li>
      * </ul>
      *
      * @param outputCsvPath caminho do CSV de saída
-     * @param warmupRuns número de execuções de warm-up por configuração
-     * @param measuredRuns número de repetições medidas por configuração (\(\ge 5\) no protocolo padrão)
+     * @param warmupRuns    número de execuções de warm-up por configuração
+     * @param measuredRuns  número de repetições medidas por configuração (\(\ge 5\)
+     *                      no protocolo padrão)
      * @return todos os registros gerados
      * @throws IOException se houver falha ao gravar o arquivo CSV
      */
     public static List<PerformanceRecord> runStandardBenchmarkSuite(
             Path outputCsvPath, int warmupRuns, int measuredRuns) throws IOException {
         String algProp = System.getProperty("perf.algorithms", "NSGA-III,MOEA/DD,RVEA,AGE-MOEA");
-        String[] algorithms =
-                Arrays.stream(algProp.split(","))
-                        .map(String::trim)
-                        .filter(s -> !s.isEmpty())
-                        .toArray(String[]::new);
-        record ProblemDim(String problem, int m) {}
+        String[] algorithms = Arrays.stream(algProp.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toArray(String[]::new);
+        record ProblemDim(String problem, int m) {
+        }
         String cfgProp = System.getProperty("perf.configs", "WFG4:3,WFG4:8,WFG4:15,DTLZ2:3");
         List<ProblemDim> configs = new ArrayList<>();
         for (String item : cfgProp.split(",")) {
@@ -1469,19 +1565,17 @@ public final class PerformanceProfiler {
                         cfg.m(),
                         warmupRuns,
                         measuredRuns);
-                List<PerformanceRecord> series =
-                        profileConfigurationSeries(
-                                cfg.problem(), alg, cfg.m(), warmupRuns, measuredRuns);
+                List<PerformanceRecord> series = profileConfigurationSeries(
+                        cfg.problem(), alg, cfg.m(), warmupRuns, measuredRuns);
                 allRecords.addAll(series);
                 writeRecordsToCsv(outputCsvPath, series, !firstBatch);
                 firstBatch = false;
                 PerformanceRecord sample = series.get(0);
-                double pHvMs =
-                        series.stream()
-                                .filter(r -> STAGE_PISA_HV.equals(r.indicator()))
-                                .mapToDouble(PerformanceRecord::indicatorWallMs)
-                                .average()
-                                .orElse(0.0);
+                double pHvMs = series.stream()
+                        .filter(r -> STAGE_PISA_HV.equals(r.indicator()))
+                        .mapToDouble(PerformanceRecord::indicatorWallMs)
+                        .average()
+                        .orElse(0.0);
                 double elapsedSec = (System.nanoTime() - t0) / 1_000_000_000.0;
                 System.out.printf(
                         Locale.US,
@@ -1499,13 +1593,18 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Seleciona um subconjunto representativo uniformemente espaçado de uma frente ordenada
-     * (incluindo pontos interiores e extremos), evitando que todos os pontos selecionados
-     * pertençam à borda do hiperplano onde \(f_j = 1.0\) (o que anularia o volume \(1.0 - f_j\)).
+     * Seleciona um subconjunto representativo uniformemente espaçado de uma frente
+     * ordenada
+     * (incluindo pontos interiores e extremos), evitando que todos os pontos
+     * selecionados
+     * pertençam à borda do hiperplano onde \(f_j = 1.0\) (o que anularia o volume
+     * \(1.0 - f_j\)).
      *
-     * @param front frente normalizada em \([0, 1]^m\)
+     * @param front      frente normalizada em \([0, 1]^m\)
      * @param targetSize tamanho desejado do subconjunto
-     * @return subconjunto de tamanho \(\min(\text{targetSize}, \text{front.length})\) com coordenadas internas estritamente \(< 1.0\)
+     * @return subconjunto de tamanho \(\min(\text{targetSize},
+     *         \text{front.length})\) com coordenadas internas estritamente \(<
+     *         1.0\)
      */
     public static double[][] selectInteriorRepresentativeSubset(double[][] front, int targetSize) {
         if (front == null || front.length == 0) {
@@ -1517,7 +1616,8 @@ public final class PerformanceProfiler {
         for (int i = 0; i < n; i++) {
             int idx = (n == 1) ? (front.length / 2) : (int) Math.round(i * (front.length - 1.0) / (n - 1.0));
             for (int j = 0; j < m; j++) {
-                // Contrai em 1% os pontos exatamente sobre a borda 1.0 para que todos contribuam positivamente ao volume 3D..15D
+                // Contrai em 1% os pontos exatamente sobre a borda 1.0 para que todos
+                // contribuam positivamente ao volume 3D..15D
                 subset[i][j] = Math.min(0.99, front[idx][j]);
             }
         }
@@ -1525,26 +1625,29 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Executa uma bateria escalonada de comparação entre os métodos de hipervolume disponíveis no
-     * jMetal 7.8 ({@link PISAHypervolume}, {@link WFGHypervolume} e {@link Hypervolume3D} para \(m=3\))
+     * Executa uma bateria escalonada de comparação entre os métodos de hipervolume
+     * disponíveis no
+     * jMetal 7.8 ({@link PISAHypervolume}, {@link WFGHypervolume} e
+     * {@link Hypervolume3D} para \(m=3\))
      * sobre subconjuntos das frentes de referência normalizadas de {@code WFG4} em
-     * \(m \in \{3, 8, 10, 15\}\), sob exatamente a mesma frente, mesma dimensão e mesmo ponto de
+     * \(m \in \{3, 8, 10, 15\}\), sob exatamente a mesma frente, mesma dimensão e
+     * mesmo ponto de
      * referência \((1.0, \dots, 1.0) \in \mathbb{R}^m\).
      *
-     * @param warmupRuns número de execuções de aquecimento por método
+     * @param warmupRuns  número de execuções de aquecimento por método
      * @param repetitions número de repetições medidas por método (\(\ge 5\))
      * @return lista consolidada de {@link HypervolumeMethodComparison}
      * @throws IOException se houver falha na leitura das frentes
      */
     public static List<HypervolumeMethodComparison> runHypervolumeScalingComparison(
             int warmupRuns, int repetitions) throws IOException {
-        record HvCase(int m, int[] sizes) {}
-        List<HvCase> cases =
-                List.of(
-                        new HvCase(3, new int[] {30, 60, 91}),
-                        new HvCase(8, new int[] {10, 20, 30}),
-                        new HvCase(10, new int[] {10, 15, 20}),
-                        new HvCase(15, new int[] {8, 12, 16}));
+        record HvCase(int m, int[] sizes) {
+        }
+        List<HvCase> cases = List.of(
+                new HvCase(3, new int[] { 30, 60, 91 }),
+                new HvCase(8, new int[] { 10, 20, 30 }),
+                new HvCase(10, new int[] { 10, 15, 20 }),
+                new HvCase(15, new int[] { 8, 12, 16 }));
 
         List<HypervolumeMethodComparison> results = new ArrayList<>();
         for (HvCase c : cases) {
@@ -1553,8 +1656,8 @@ public final class PerformanceProfiler {
             double[][] normFront = NormalizeUtils.normalize(rawFront);
             for (int size : c.sizes()) {
                 double[][] subset = selectInteriorRepresentativeSubset(normFront, size);
-                List<HypervolumeMethodComparison> comp =
-                        compareHypervolumeMethods("WFG4", subset, c.m(), warmupRuns, repetitions);
+                List<HypervolumeMethodComparison> comp = compareHypervolumeMethods("WFG4", subset, c.m(), warmupRuns,
+                        repetitions);
                 results.addAll(comp);
             }
         }
@@ -1562,8 +1665,10 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Imprime no console o resumo estatístico completo (média, desvio padrão, mediana, mínimo e máximo,
-     * sem remover outliers) de todos os algoritmos e etapas/indicadores presentes em
+     * Imprime no console o resumo estatístico completo (média, desvio padrão,
+     * mediana, mínimo e máximo,
+     * sem remover outliers) de todos os algoritmos e etapas/indicadores presentes
+     * em
      * {@code docs/performance/performance-results.csv}.
      *
      * @param csvPath caminho do CSV
@@ -1654,13 +1759,15 @@ public final class PerformanceProfiler {
     }
 
     /**
-     * Ponto de entrada CLI para execução reprodutível do protocolo de avaliação de desempenho (T09).
+     * Ponto de entrada CLI para execução reprodutível do protocolo de avaliação de
+     * desempenho (T09).
      *
-     * <p>Aceita propriedades de sistema opcionais:
+     * <p>
+     * Aceita propriedades de sistema opcionais:
      * <ul>
-     *   <li>{@code -Dperf.warmup=1} (padrão: {@code 1});</li>
-     *   <li>{@code -Dperf.runs=5} (padrão: {@code 5});</li>
-     *   <li>{@code -Dperf.output=docs/performance/performance-results.csv}.</li>
+     * <li>{@code -Dperf.warmup=1} (padrão: {@code 1});</li>
+     * <li>{@code -Dperf.runs=5} (padrão: {@code 5});</li>
+     * <li>{@code -Dperf.output=docs/performance/performance-results.csv}.</li>
      * </ul>
      *
      * @param args argumentos de linha de comando
@@ -1669,10 +1776,9 @@ public final class PerformanceProfiler {
     public static void main(String[] args) throws IOException {
         int warmup = Integer.getInteger("perf.warmup", 1);
         int runs = Integer.getInteger("perf.runs", 5);
-        Path outputPath =
-                Path.of(
-                        System.getProperty(
-                                "perf.output", DEFAULT_RESULTS_CSV_PATH.toString()));
+        Path outputPath = Path.of(
+                System.getProperty(
+                        "perf.output", DEFAULT_RESULTS_CSV_PATH.toString()));
 
         System.out.printf(
                 Locale.US,
@@ -1704,8 +1810,7 @@ public final class PerformanceProfiler {
         }
 
         if (Boolean.getBoolean("perf.compareHvOnly")) {
-            List<HypervolumeMethodComparison> hvComps =
-                    runHypervolumeScalingComparison(warmup, runs);
+            List<HypervolumeMethodComparison> hvComps = runHypervolumeScalingComparison(warmup, runs);
             for (HypervolumeMethodComparison hc : hvComps) {
                 System.out.printf(
                         Locale.US,

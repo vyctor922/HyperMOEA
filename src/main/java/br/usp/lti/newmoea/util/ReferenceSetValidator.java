@@ -1,9 +1,12 @@
 package br.usp.lti.newmoea.util;
 
+import br.usp.lti.newmoea.study.StaticParams;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -11,39 +14,62 @@ import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 /**
- * Utilitário independente para validação matemática de conjuntos de pontos de referência
- * (Das & Dennis / Deb & Jain), simulação de {@code reference-calc.java}, comparação de
- * conjuntos independente da ordem das linhas, validação estrita de arquivos de pesos do MOEA/DD
+ * Utilitário independente para validação matemática de conjuntos de pontos de
+ * referência
+ * (Das & Dennis / Deb & Jain), simulação de {@code reference-calc.java},
+ * comparação de
+ * conjuntos independente da ordem das linhas, validação estrita de arquivos de
+ * pesos do MOEA/DD
  * e geração controlada de variantes com substituição opcional de zeros (T11).
  */
 public final class ReferenceSetValidator {
 
-    /** Tolerância numérica padrão para validações de simplex e equivalência de conjuntos. */
+    /**
+     * Tolerância numérica padrão para validações de simplex e equivalência de
+     * conjuntos.
+     */
     public static final double DEFAULT_TOLERANCE = 1e-6;
 
-    /** Nome da propriedade JVM para habilitar substituição opcional de zeros (desativada por padrão). */
+    /**
+     * Nome da propriedade JVM para habilitar substituição opcional de zeros
+     * (desativada por padrão).
+     */
     public static final String REPLACE_ZERO_WEIGHTS_PROPERTY = "replaceZeroWeights";
 
-    /** Nome da propriedade JVM para habilitar persistência opcional de pontos do NSGA-III (desativada por padrão). */
+    /**
+     * Nome da propriedade JVM para habilitar persistência opcional de pontos do
+     * NSGA-III (desativada por padrão).
+     */
     public static final String PERSIST_REFERENCE_POINTS_PROPERTY = "persistReferencePoints";
 
-    /** Nome da propriedade JVM para habilitar persistência opcional de direções do RVEA (desativada por padrão). */
+    /**
+     * Nome da propriedade JVM para habilitar persistência opcional de direções do
+     * RVEA (desativada por padrão).
+     */
     public static final String PERSIST_REFERENCE_DIRECTIONS_PROPERTY = "persistReferenceDirections";
 
-    /** Diretório padrão para persistência opcional de pontos de referência do NSGA-III (T07). */
-    public static final Path DEFAULT_NSGAIII_PERSIST_DIR =
-            Path.of("resources", "referencePoints", "nsgaiii");
+    /**
+     * Diretório padrão para persistência opcional de pontos de referência do
+     * NSGA-III (T07).
+     */
+    public static final Path DEFAULT_NSGAIII_PERSIST_DIR = Path.of("resources", "referencePoints", "nsgaiii");
 
-    /** Diretório padrão para persistência opcional de direções de referência do RVEA (T07). */
-    public static final Path DEFAULT_RVEA_PERSIST_DIR =
-            Path.of("resources", "referencePoints", "rvea");
+    /**
+     * Diretório padrão para persistência opcional de direções de referência do RVEA
+     * (T07).
+     */
+    public static final Path DEFAULT_RVEA_PERSIST_DIR = Path.of("resources", "referencePoints", "rvea");
 
     /** Valor substituto padrão para coordenadas zero quando habilitado (1.0e-5). */
     public static final double DEFAULT_ZERO_REPLACEMENT = 1.0e-5;
 
-    /** Limite de iterações para proteger a simulação de {@code reference-calc} contra laços infinitos. */
+    /**
+     * Limite de iterações para proteger a simulação de {@code reference-calc}
+     * contra laços infinitos.
+     */
     private static final int MAX_SIMULATION_STEPS = 50_000_000;
 
     private ReferenceSetValidator() {
@@ -60,19 +86,30 @@ public final class ReferenceSetValidator {
     /**
      * Relatório de validação intrínseca de um conjunto de vetores no simplex.
      *
-     * @param vectorCount quantidade de vetores
-     * @param dimension dimensionalidade uniforme (ou -1 se inconsistente)
-     * @param allFinite verdadeiro se todas as coordenadas forem finitas
-     * @param allNonNegative verdadeiro se todas as coordenadas forem >= -tolerance
-     * @param allStrictlyPositive verdadeiro se todas as coordenadas forem > 0
-     * @param minCoordinate menor coordenada observada
-     * @param maxCoordinate maior coordenada observada
-     * @param minSum menor soma de componentes observada entre os vetores
-     * @param maxSum maior soma de componentes observada entre os vetores
-     * @param maxSumDeviationFromOne maior desvio absoluto |sum - 1.0|
-     * @param duplicateCount quantidade de vetores duplicados (distância euclidiana <= duplicateTolerance)
-     * @param minPairwiseEuclideanDistance menor distância euclidiana entre dois vetores distintos
-     * @param validSimplex verdadeiro se satisfizer todas as propriedades de simplex dentro das tolerâncias
+     * @param vectorCount                  quantidade de vetores
+     * @param dimension                    dimensionalidade uniforme (ou -1 se
+     *                                     inconsistente)
+     * @param allFinite                    verdadeiro se todas as coordenadas forem
+     *                                     finitas
+     * @param allNonNegative               verdadeiro se todas as coordenadas forem
+     *                                     >= -tolerance
+     * @param allStrictlyPositive          verdadeiro se todas as coordenadas forem
+     *                                     > 0
+     * @param minCoordinate                menor coordenada observada
+     * @param maxCoordinate                maior coordenada observada
+     * @param minSum                       menor soma de componentes observada entre
+     *                                     os vetores
+     * @param maxSum                       maior soma de componentes observada entre
+     *                                     os vetores
+     * @param maxSumDeviationFromOne       maior desvio absoluto |sum - 1.0|
+     * @param duplicateCount               quantidade de vetores duplicados
+     *                                     (distância euclidiana <=
+     *                                     duplicateTolerance)
+     * @param minPairwiseEuclideanDistance menor distância euclidiana entre dois
+     *                                     vetores distintos
+     * @param validSimplex                 verdadeiro se satisfizer todas as
+     *                                     propriedades de simplex dentro das
+     *                                     tolerâncias
      */
     public record SetValidationReport(
             int vectorCount,
@@ -87,24 +124,31 @@ public final class ReferenceSetValidator {
             double maxSumDeviationFromOne,
             int duplicateCount,
             double minPairwiseEuclideanDistance,
-            boolean validSimplex) {}
+            boolean validSimplex) {
+    }
 
     /**
-     * Relatório de comparação entre dois conjuntos de vetores, independente da ordem das linhas.
+     * Relatório de comparação entre dois conjuntos de vetores, independente da
+     * ordem das linhas.
      *
-     * @param countA número de vetores no conjunto A
-     * @param countB número de vetores no conjunto B
-     * @param dimensionA dimensionalidade do conjunto A
-     * @param dimensionB dimensionalidade do conjunto B
-     * @param duplicatesA número de duplicatas internas em A
-     * @param duplicatesB número de duplicatas internas em B
-     * @param matchedCount número de pares casados dentro da tolerância
-     * @param unmatchedFromA número de vetores de A sem correspondência em B dentro da tolerância
-     * @param unmatchedFromB número de vetores de B sem correspondência em A dentro da tolerância
-     * @param maxCoordinateError maior erro absoluto por coordenada na bijeção entre A e B
-     * @param maxEuclideanError maior distância euclidiana na bijeção entre A e B
-     * @param tolerance tolerância utilizada para o veredito
-     * @param verdict veredito da comparação ({@link Verdict#EQUIVALENT}, {@link Verdict#NOT_EQUIVALENT}, {@link Verdict#INCONCLUSIVE})
+     * @param countA             número de vetores no conjunto A
+     * @param countB             número de vetores no conjunto B
+     * @param dimensionA         dimensionalidade do conjunto A
+     * @param dimensionB         dimensionalidade do conjunto B
+     * @param duplicatesA        número de duplicatas internas em A
+     * @param duplicatesB        número de duplicatas internas em B
+     * @param matchedCount       número de pares casados dentro da tolerância
+     * @param unmatchedFromA     número de vetores de A sem correspondência em B
+     *                           dentro da tolerância
+     * @param unmatchedFromB     número de vetores de B sem correspondência em A
+     *                           dentro da tolerância
+     * @param maxCoordinateError maior erro absoluto por coordenada na bijeção entre
+     *                           A e B
+     * @param maxEuclideanError  maior distância euclidiana na bijeção entre A e B
+     * @param tolerance          tolerância utilizada para o veredito
+     * @param verdict            veredito da comparação ({@link Verdict#EQUIVALENT},
+     *                           {@link Verdict#NOT_EQUIVALENT},
+     *                           {@link Verdict#INCONCLUSIVE})
      */
     public record SetComparisonReport(
             int countA,
@@ -119,24 +163,33 @@ public final class ReferenceSetValidator {
             double maxCoordinateError,
             double maxEuclideanError,
             double tolerance,
-            Verdict verdict) {}
+            Verdict verdict) {
+    }
 
     /**
-     * Relatório da substituição opcional e controlada de coordenadas zero ({@code 0.0 -> epsilon})
+     * Relatório da substituição opcional e controlada de coordenadas zero
+     * ({@code 0.0 -> epsilon})
      * em arquivo de pesos (T11).
      *
-     * @param sourceFile arquivo original inspecionado (intocado)
-     * @param outputFile arquivo gerado em {@code weights_gen/} (ou {@code null} quando a geração está desativada)
-     * @param enabled verdadeiro se a substituição estava habilitada
-     * @param generated verdadeiro se o arquivo de saída foi efetivamente gravado
-     * @param vectorCount quantidade de vetores preservada
-     * @param dimension dimensionalidade preservada (m)
-     * @param zeroReplacement valor substituto aplicado (ex.: 1.0e-5)
-     * @param replacedComponentCount número total de componentes iguais a 0.0 substituídos por {@code zeroReplacement}
-     * @param vectorSumsAfterReplacement soma exata de cada vetor após a substituição
-     * @param minSum menor soma observada após a substituição
-     * @param maxSum maior soma observada após a substituição
-     * @param validationReport relatório de validação intrínseca do conjunto resultante
+     * @param sourceFile                 arquivo original inspecionado (intocado)
+     * @param outputFile                 arquivo gerado em {@code weights_gen/} (ou
+     *                                   {@code null} quando a geração está
+     *                                   desativada)
+     * @param enabled                    verdadeiro se a substituição estava
+     *                                   habilitada
+     * @param generated                  verdadeiro se o arquivo de saída foi
+     *                                   efetivamente gravado
+     * @param vectorCount                quantidade de vetores preservada
+     * @param dimension                  dimensionalidade preservada (m)
+     * @param zeroReplacement            valor substituto aplicado (ex.: 1.0e-5)
+     * @param replacedComponentCount     número total de componentes iguais a 0.0
+     *                                   substituídos por {@code zeroReplacement}
+     * @param vectorSumsAfterReplacement soma exata de cada vetor após a
+     *                                   substituição
+     * @param minSum                     menor soma observada após a substituição
+     * @param maxSum                     maior soma observada após a substituição
+     * @param validationReport           relatório de validação intrínseca do
+     *                                   conjunto resultante
      */
     public record ZeroReplacementReport(
             Path sourceFile,
@@ -150,18 +203,26 @@ public final class ReferenceSetValidator {
             double[] vectorSumsAfterReplacement,
             double minSum,
             double maxSum,
-            SetValidationReport validationReport) {}
+            SetValidationReport validationReport) {
+    }
 
     /**
-     * Relatório de persistência opcional de pontos de referência (NSGA-III) ou direções (RVEA) em T07.
+     * Relatório de persistência opcional de pontos de referência (NSGA-III) ou
+     * direções (RVEA) em T07.
      *
-     * @param outputFile caminho do arquivo CSV persistido (ou {@code null} quando desativado)
-     * @param enabled verdadeiro se a persistência estava habilitada
-     * @param written verdadeiro se um novo arquivo foi gravado nesta chamada
-     * @param reusedIdenticalExisting verdadeiro se o arquivo já existia com conteúdo idêntico e foi preservado sem sobrescrita
-     * @param suffixedDueToConflict verdadeiro se o arquivo base já existia com conteúdo distinto e foi gravado com sufixo de proteção
-     * @param vectorCount quantidade de vetores
-     * @param dimension dimensionalidade dos vetores (m)
+     * @param outputFile              caminho do arquivo CSV persistido (ou
+     *                                {@code null} quando desativado)
+     * @param enabled                 verdadeiro se a persistência estava habilitada
+     * @param written                 verdadeiro se um novo arquivo foi gravado
+     *                                nesta chamada
+     * @param reusedIdenticalExisting verdadeiro se o arquivo já existia com
+     *                                conteúdo idêntico e foi preservado sem
+     *                                sobrescrita
+     * @param suffixedDueToConflict   verdadeiro se o arquivo base já existia com
+     *                                conteúdo distinto e foi gravado com sufixo de
+     *                                proteção
+     * @param vectorCount             quantidade de vetores
+     * @param dimension               dimensionalidade dos vetores (m)
      */
     public record ReferencePersistenceReport(
             Path outputFile,
@@ -170,7 +231,8 @@ public final class ReferenceSetValidator {
             boolean reusedIdenticalExisting,
             boolean suffixedDueToConflict,
             int vectorCount,
-            int dimension) {}
+            int dimension) {
+    }
 
     /**
      * Calcula o coeficiente binomial C(n, k).
@@ -193,10 +255,11 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Calcula a quantidade canônica de pontos no simplex-lattice de Das & Dennis (1998) para uma camada:
+     * Calcula a quantidade canônica de pontos no simplex-lattice de Das & Dennis
+     * (1998) para uma camada:
      * |H| = C(H + m - 1, m - 1).
      *
-     * @param m número de objetivos (m >= 2)
+     * @param m         número de objetivos (m >= 2)
      * @param divisions número de divisões H (divisions >= 1)
      * @return quantidade esperada de pontos
      */
@@ -206,11 +269,13 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Calcula a quantidade canônica de pontos no simplex-lattice de duas camadas (Deb & Jain, 2014).
+     * Calcula a quantidade canônica de pontos no simplex-lattice de duas camadas
+     * (Deb & Jain, 2014).
      *
-     * @param m número de objetivos (m >= 2)
+     * @param m              número de objetivos (m >= 2)
      * @param outerDivisions divisões da camada externa H1 (H1 >= 1)
-     * @param innerDivisions divisões da camada interna H2 (H2 >= 0; 0 indica apenas camada externa)
+     * @param innerDivisions divisões da camada interna H2 (H2 >= 0; 0 indica apenas
+     *                       camada externa)
      * @return quantidade total esperada de pontos
      */
     public static int expectedTwoLayerPoints(int m, int outerDivisions, int innerDivisions) {
@@ -223,7 +288,7 @@ public final class ReferenceSetValidator {
     /**
      * Valida os parâmetros de configuração de camadas de Das & Dennis / Deb & Jain.
      *
-     * @param m número de objetivos (deve ser >= 2)
+     * @param m              número de objetivos (deve ser >= 2)
      * @param outerDivisions divisões externas H1 (deve ser >= 1)
      * @param innerDivisions divisões internas H2 (deve ser >= 0)
      */
@@ -243,10 +308,11 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Gera canonicamente a camada única do simplex-lattice de Das & Dennis (1998) com H divisões.
+     * Gera canonicamente a camada única do simplex-lattice de Das & Dennis (1998)
+     * com H divisões.
      * Cada ponto possui coordenadas em {0/H, 1/H, ..., H/H} cuja soma exata é 1.0.
      *
-     * @param m número de objetivos (m >= 2)
+     * @param m         número de objetivos (m >= 2)
      * @param divisions número de divisões H (H >= 1)
      * @return matriz de pontos [N][m]
      */
@@ -279,7 +345,7 @@ public final class ReferenceSetValidator {
      * Gera canonicamente a camada interna contraída segundo Deb & Jain (2014):
      * x_i^{inner} = 0.5 * x_i^{(H2)} + 1 / (2 * m).
      *
-     * @param m número de objetivos (m >= 2)
+     * @param m              número de objetivos (m >= 2)
      * @param innerDivisions divisões internas H2 (H2 >= 1)
      * @return matriz de pontos [N_inner][m]
      */
@@ -301,11 +367,13 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Gera o conjunto canônico de uma ou duas camadas segundo Das & Dennis (1998) e Deb & Jain (2014).
-     * Se {@code innerDivisions == 0}, retorna apenas a camada externa; se {@code innerDivisions > 0},
+     * Gera o conjunto canônico de uma ou duas camadas segundo Das & Dennis (1998) e
+     * Deb & Jain (2014).
+     * Se {@code innerDivisions == 0}, retorna apenas a camada externa; se
+     * {@code innerDivisions > 0},
      * concatena a camada externa (H1) e a camada interna contraída (H2).
      *
-     * @param m número de objetivos (m >= 2)
+     * @param m              número de objetivos (m >= 2)
      * @param outerDivisions divisões da camada externa H1 (H1 >= 1)
      * @param innerDivisions divisões da camada interna H2 (H2 >= 0)
      * @return matriz de pontos [N][m]
@@ -324,12 +392,15 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Gera o conjunto de duas camadas não contraídas exatamente como nos arquivos oficiais do jMetal 7.8
-     * para {@code W8D_156.dat} e {@code W10D_275.dat}, onde a segunda camada {@code H2} é concatenada
-     * diretamente sem a contração centrípeta {@code 0.5 * x_i + 1/(2m)} de Deb & Jain (2014), ocasionando
+     * Gera o conjunto de duas camadas não contraídas exatamente como nos arquivos
+     * oficiais do jMetal 7.8
+     * para {@code W8D_156.dat} e {@code W10D_275.dat}, onde a segunda camada
+     * {@code H2} é concatenada
+     * diretamente sem a contração centrípeta {@code 0.5 * x_i + 1/(2m)} de Deb &
+     * Jain (2014), ocasionando
      * repetição exata dos {@code m} vértices extremos {@code e_1, ..., e_m}.
      *
-     * @param m número de objetivos (m >= 2)
+     * @param m              número de objetivos (m >= 2)
      * @param outerDivisions divisões da camada externa H1 (H1 >= 1)
      * @param innerDivisions divisões da camada interna H2 (H2 >= 0)
      * @return matriz de pontos [N][m]
@@ -348,11 +419,14 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Gera a variante de 2 camadas implementada internamente pela classe {@code NSGAIII} do jMetal 7.8
-     * (linhas 58–71 de {@code org.uma.jmetal.algorithm.multiobjective.nsgaiii.NSGAIII}), na qual a
-     * camada interna sofre a transformação {@code (x_i + 1.0) / (m + 1.0)} em vez de {@code 0.5 * x_i + 1/(2m)}.
+     * Gera a variante de 2 camadas implementada internamente pela classe
+     * {@code NSGAIII} do jMetal 7.8
+     * (linhas 58–71 de
+     * {@code org.uma.jmetal.algorithm.multiobjective.nsgaiii.NSGAIII}), na qual a
+     * camada interna sofre a transformação {@code (x_i + 1.0) / (m + 1.0)} em vez
+     * de {@code 0.5 * x_i + 1/(2m)}.
      *
-     * @param m número de objetivos (m >= 2)
+     * @param m              número de objetivos (m >= 2)
      * @param outerDivisions divisões da camada externa H1 (H1 >= 1)
      * @param innerDivisions divisões da camada interna H2 (H2 >= 0)
      * @return matriz de pontos [N][m]
@@ -376,18 +450,23 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Gera o conjunto de Das & Dennis / Deb & Jain substituindo coordenadas zero (0.0) por
-     * {@code zeroReplacement} (ex.: {@code 1e-5}) no simplex base antes da contração da camada interna:
+     * Gera o conjunto de Das & Dennis / Deb & Jain substituindo coordenadas zero
+     * (0.0) por
+     * {@code zeroReplacement} (ex.: {@code 1e-5}) no simplex base antes da
+     * contração da camada interna:
      * <ul>
-     *   <li>Camada externa: {@code w_i = (x_i == 0.0) ? zeroReplacement : x_i}</li>
-     *   <li>Camada interna: {@code w_i = 0.5 * ((x_i == 0.0) ? zeroReplacement : x_i) + 1.0 / (2.0 * m)}</li>
+     * <li>Camada externa: {@code w_i = (x_i == 0.0) ? zeroReplacement : x_i}</li>
+     * <li>Camada interna:
+     * {@code w_i = 0.5 * ((x_i == 0.0) ? zeroReplacement : x_i) + 1.0 / (2.0 * m)}</li>
      * </ul>
-     * Esta é a fórmula exata que gerou os arquivos com substituição de zero em {@code MOEAD_Weights/}.
+     * Esta é a fórmula exata que gerou os arquivos com substituição de zero em
+     * {@code MOEAD_Weights/}.
      *
-     * @param m número de objetivos (m >= 2)
-     * @param outerDivisions divisões externas H1 (H1 >= 1)
-     * @param innerDivisions divisões internas H2 (H2 >= 0)
-     * @param zeroReplacement valor positivo substituto para coordenadas zero (ex.: 1e-5)
+     * @param m               número de objetivos (m >= 2)
+     * @param outerDivisions  divisões externas H1 (H1 >= 1)
+     * @param innerDivisions  divisões internas H2 (H2 >= 0)
+     * @param zeroReplacement valor positivo substituto para coordenadas zero (ex.:
+     *                        1e-5)
      * @return matriz de vetores [N][m]
      */
     public static double[][] generateZeroReplacedCanonical(
@@ -422,13 +501,15 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Reproduz fielmente em memória o algoritmo de {@code C:\Users\vyctor922\Desktop\reference-calc.java},
-     * incluindo {@code arredondar} com {@code fator = 100000}, {@code margemErro = 1 - 0.9999},
+     * Reproduz fielmente em memória o algoritmo de
+     * {@code C:\Users\vyctor922\Desktop\reference-calc.java},
+     * incluindo {@code arredondar} com {@code fator = 100000},
+     * {@code margemErro = 1 - 0.9999},
      * {@code limInf}, {@code limSup} e {@code intervalo}.
      *
      * @param dimensoes número de dimensões (m)
-     * @param divisoes número de divisões (H)
-     * @param layers número de camadas
+     * @param divisoes  número de divisões (H)
+     * @param layers    número de camadas
      * @return matriz de vetores impressos por {@code reference-calc}
      */
     public static double[][] simulateReferenceCalc(int dimensoes, int divisoes, int layers) {
@@ -508,14 +589,16 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Avalia as propriedades matemáticas de um conjunto de vetores no simplex (contagem, dimensão,
+     * Avalia as propriedades matemáticas de um conjunto de vetores no simplex
+     * (contagem, dimensão,
      * finitude, não negatividade, soma unitária e ausência de duplicatas).
      *
-     * @param vectors matriz de vetores [N][m]
-     * @param expectedCount quantidade esperada de vetores
-     * @param expectedDimension dimensionalidade esperada (m)
-     * @param sumTolerance tolerância para |sum(x_i) - 1.0|
-     * @param duplicateTolerance tolerância de distância euclidiana abaixo da qual dois vetores são duplicatas
+     * @param vectors            matriz de vetores [N][m]
+     * @param expectedCount      quantidade esperada de vetores
+     * @param expectedDimension  dimensionalidade esperada (m)
+     * @param sumTolerance       tolerância para |sum(x_i) - 1.0|
+     * @param duplicateTolerance tolerância de distância euclidiana abaixo da qual
+     *                           dois vetores são duplicatas
      * @return {@link SetValidationReport} detalhado
      */
     public static SetValidationReport validateSimplexSet(
@@ -526,7 +609,8 @@ public final class ReferenceSetValidator {
             double duplicateTolerance) {
         if (vectors == null || vectors.length == 0) {
             return new SetValidationReport(
-                    0, 0, false, false, false, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, 0, Double.NaN, false);
+                    0, 0, false, false, false, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, 0,
+                    Double.NaN, false);
         }
         int count = vectors.length;
         int dim = vectors[0] == null ? -1 : vectors[0].length;
@@ -612,21 +696,22 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Valida estritamente um conjunto de vetores no simplex, lançando {@link IllegalArgumentException}
+     * Valida estritamente um conjunto de vetores no simplex, lançando
+     * {@link IllegalArgumentException}
      * caso qualquer propriedade falhe.
      *
-     * @param vectors matriz de vetores [N][m]
-     * @param expectedCount quantidade esperada de vetores
+     * @param vectors           matriz de vetores [N][m]
+     * @param expectedCount     quantidade esperada de vetores
      * @param expectedDimension dimensionalidade esperada (m)
-     * @param tolerance tolerância numérica
+     * @param tolerance         tolerância numérica
      */
     public static void assertValidSimplexSet(
             double[][] vectors, int expectedCount, int expectedDimension, double tolerance) {
         if (vectors == null) {
             throw new IllegalArgumentException("Conjunto de vetores não pode ser nulo.");
         }
-        SetValidationReport report =
-                validateSimplexSet(vectors, expectedCount, expectedDimension, tolerance, tolerance);
+        SetValidationReport report = validateSimplexSet(vectors, expectedCount, expectedDimension, tolerance,
+                tolerance);
         if (!report.validSimplex()) {
             throw new IllegalArgumentException(
                     String.format(
@@ -645,9 +730,10 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Conta duplicatas internas em um conjunto de vetores usando distância euclidiana <= duplicateTolerance.
+     * Conta duplicatas internas em um conjunto de vetores usando distância
+     * euclidiana <= duplicateTolerance.
      *
-     * @param set matriz de vetores
+     * @param set                matriz de vetores
      * @param duplicateTolerance tolerância para considerar dois vetores duplicados
      * @return quantidade de vetores duplicados
      */
@@ -678,12 +764,14 @@ public final class ReferenceSetValidator {
 
     /**
      * Compara dois conjuntos de vetores independentemente da ordem das linhas.
-     * Realiza casamento bijetivo guloso por menor distância euclidiana global (ordenando todos os pares
-     * ou buscando iterativamente o par não casado de menor distância euclidiana), garantindo invariância
+     * Realiza casamento bijetivo guloso por menor distância euclidiana global
+     * (ordenando todos os pares
+     * ou buscando iterativamente o par não casado de menor distância euclidiana),
+     * garantindo invariância
      * completa à permutação das linhas de A e B.
      *
-     * @param setA primeiro conjunto de vetores
-     * @param setB segundo conjunto de vetores
+     * @param setA      primeiro conjunto de vetores
+     * @param setB      segundo conjunto de vetores
      * @param tolerance tolerância numérica para erro máximo por coordenada
      * @return {@link SetComparisonReport} com métricas detalhadas e veredito
      */
@@ -824,13 +912,12 @@ public final class ReferenceSetValidator {
         int unmatchedFromA = countA - matchedWithinTolerance;
         int unmatchedFromB = countB - matchedWithinTolerance;
 
-        Verdict verdict =
-                (countA == countB
-                                && duplicatesA == 0
-                                && duplicatesB == 0
-                                && unmatchedFromA == 0
-                                && unmatchedFromB == 0
-                                && maxCoordErr <= tolerance)
+        Verdict verdict = (countA == countB
+                && duplicatesA == 0
+                && duplicatesB == 0
+                && unmatchedFromA == 0
+                && unmatchedFromB == 0
+                && maxCoordErr <= tolerance)
                         ? Verdict.EQUIVALENT
                         : Verdict.NOT_EQUIVALENT;
 
@@ -851,24 +938,35 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Valida rigorosamente um arquivo de vetores de pesos do MOEA/DD (ex.: {@code MOEAD_Weights/W{m}D_{N}.dat}).
-     * Verifica existência, legibilidade, quantidade de linhas igual à população esperada, dimensionalidade
-     * igual ao número de objetivos, finitude, não negatividade, soma próxima de 1.0 dentro de {@code sumTolerance}
+     * Valida rigorosamente um arquivo de vetores de pesos do MOEA/DD (ex.:
+     * {@code MOEAD_Weights/W{m}D_{N}.dat}).
+     * Verifica existência, legibilidade, quantidade de linhas igual à população
+     * esperada, dimensionalidade
+     * igual ao número de objetivos, finitude, não negatividade, soma próxima de 1.0
+     * dentro de {@code sumTolerance}
      * e ausência de duplicatas arbitrárias dentro de {@code duplicateTolerance}.
      * <p>
-     * Nos arquivos oficiais de duas camadas do jMetal 7.8 ({@code W8D_156.dat} e {@code W10D_275.dat}),
-     * a camada interna {@code H2=2} foi gerada pelos autores do jMetal sem contração centrípeta, o que faz
-     * com que os {@code m} vértices extremos unitários apareçam tanto na camada externa quanto na camada
-     * interna. O validador reconhece especificamente essa assinatura estrutural oficial do jMetal, mantendo
+     * Nos arquivos oficiais de duas camadas do jMetal 7.8 ({@code W8D_156.dat} e
+     * {@code W10D_275.dat}),
+     * a camada interna {@code H2=2} foi gerada pelos autores do jMetal sem
+     * contração centrípeta, o que faz
+     * com que os {@code m} vértices extremos unitários apareçam tanto na camada
+     * externa quanto na camada
+     * interna. O validador reconhece especificamente essa assinatura estrutural
+     * oficial do jMetal, mantendo
      * rejeição estrita para quaisquer outras duplicatas.
      *
-     * @param weightFile caminho do arquivo {@code .dat}
-     * @param expectedObjectives número esperado de objetivos (colunas)
+     * @param weightFile             caminho do arquivo {@code .dat}
+     * @param expectedObjectives     número esperado de objetivos (colunas)
      * @param expectedPopulationSize tamanho esperado da população (linhas)
-     * @param sumTolerance tolerância para |sum(w_i) - 1.0| (ex.: 1e-3 devido à substituição 0 -> 1e-5)
-     * @param duplicateTolerance tolerância euclidiana para detecção de vetores duplicados (ex.: 1e-7)
-     * @return matriz {@code double[expectedPopulationSize][expectedObjectives]} com os pesos validados
-     * @throws IllegalArgumentException se o arquivo for ausente, ilegível ou violar qualquer critério
+     * @param sumTolerance           tolerância para |sum(w_i) - 1.0| (ex.: 1e-3
+     *                               devido à substituição 0 -> 1e-5)
+     * @param duplicateTolerance     tolerância euclidiana para detecção de vetores
+     *                               duplicados (ex.: 1e-7)
+     * @return matriz {@code double[expectedPopulationSize][expectedObjectives]} com
+     *         os pesos validados
+     * @throws IllegalArgumentException se o arquivo for ausente, ilegível ou violar
+     *                                  qualquer critério
      */
     public static double[][] validateMoeadWeightFile(
             Path weightFile,
@@ -963,8 +1061,10 @@ public final class ReferenceSetValidator {
             for (int j = i + 1; j < weights.length; j++) {
                 double dist = euclideanDistance(weights[i], weights[j]);
                 if (dist <= duplicateTolerance) {
-                    if (outerCount > 0 && i < outerCount && j >= outerCount && isUnitAxisVertex(weights[i], duplicateTolerance)) {
-                        // Vértice extremo repetido entre a camada externa (H1=3) e a camada interna não contraída (H2=2)
+                    if (outerCount > 0 && i < outerCount && j >= outerCount
+                            && isUnitAxisVertex(weights[i], duplicateTolerance)) {
+                        // Vértice extremo repetido entre a camada externa (H1=3) e a camada interna não
+                        // contraída (H2=2)
                         // nos arquivos oficiais do jMetal 7.8 (W8D_156.dat e W10D_275.dat)
                         continue;
                     }
@@ -1005,23 +1105,102 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Verifica se a substituição opcional de zeros em vetores de pesos está habilitada via propriedade JVM
-     * {@code -DreplaceZeroWeights=true}. Por padrão, retorna {@code false}.
-     *
-     * @return {@code true} se {@code -DreplaceZeroWeights=true}, {@code false} caso contrário
+     * Normaliza identificadores de algoritmos (remove {@code /}, {@code -},
+     * {@code _}, espaços)
+     * para comparação tolerante nas flags JVM granulares.
      */
-    public static boolean isReplaceZeroWeightsEnabled() {
-        return Boolean.parseBoolean(System.getProperty(REPLACE_ZERO_WEIGHTS_PROPERTY, "false"));
+    static String normalizeAlgorithmToken(String token) {
+        if (token == null) {
+            return "";
+        }
+        String norm = token.replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT);
+        if ("AGE2".equals(norm)) {
+            return "AGEMOEAII";
+        }
+        return norm;
     }
 
     /**
-     * Executa o procedimento controlado de substituição de coordenadas zero ({@code 0.0 -> zeroReplacement})
-     * respeitando a propriedade JVM {@code -DreplaceZeroWeights=false} (desativada por padrão).
-     * Se a propriedade estiver desativada ({@code false}), não gera arquivo em {@code outputDir}.
+     * Avalia uma flag booleana/granular (ex.: {@code -DreplaceZeroWeights} ou
+     * {@code -DreplaceZeroFronts}) respeitando o contrato:
+     * <ul>
+     * <li>Ausente, vazia ou {@code false}/{@code none}: desativada por padrão;</li>
+     * <li>{@code true}: ativada globalmente para todos os algoritmos;</li>
+     * <li>Lista separada por vírgulas (ex.: {@code MOEADD,FDEA}): ativada somente
+     * quando
+     * {@code algorithmName} corresponder a um dos itens configurados.</li>
+     * </ul>
      *
-     * @param sourceFile arquivo de pesos original (nunca modificado)
-     * @param outputDir diretório de saída para variantes geradas (ex.: {@code resources/weightVectorFiles/weights_gen})
-     * @param zeroReplacement valor positivo substituto para coordenadas zero (ex.: {@code 1.0e-5})
+     * @param propertyName  nome da propriedade JVM
+     * @param algorithmName identificador do algoritmo (ou {@code null} para
+     *                      consulta global)
+     * @return {@code true} se habilitada para o escopo informado
+     */
+    public static boolean isScopingPropertyEnabledForAlgorithm(String propertyName, String algorithmName) {
+        String raw = System.getProperty(propertyName);
+        if (raw == null || raw.isBlank()) {
+            return false;
+        }
+        String trimmed = raw.trim();
+        if ("false".equalsIgnoreCase(trimmed) || "none".equalsIgnoreCase(trimmed)) {
+            return false;
+        }
+        if ("true".equalsIgnoreCase(trimmed)) {
+            return true;
+        }
+        if (algorithmName == null || algorithmName.isBlank()) {
+            return false;
+        }
+        String target = normalizeAlgorithmToken(algorithmName);
+        for (String part : trimmed.split(",")) {
+            String candidate = normalizeAlgorithmToken(part);
+            if ("ALL".equals(candidate) || (!candidate.isEmpty() && candidate.equals(target))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Verifica se a substituição opcional de zeros em vetores de pesos está
+     * habilitada globalmente via propriedade JVM {@code -DreplaceZeroWeights=true}.
+     * Por padrão, retorna {@code false}.
+     *
+     * @return {@code true} se {@code -DreplaceZeroWeights=true}, {@code false} caso
+     *         contrário
+     */
+    public static boolean isReplaceZeroWeightsEnabled() {
+        return isScopingPropertyEnabledForAlgorithm(REPLACE_ZERO_WEIGHTS_PROPERTY, null);
+    }
+
+    /**
+     * Verifica se a substituição opcional de zeros em vetores de pesos está
+     * habilitada globalmente ({@code true}) ou especificamente para
+     * {@code algorithmName}
+     * (ex.: {@code -DreplaceZeroWeights=MOEADD,GWASFGA}). Por padrão, retorna
+     * {@code false}.
+     *
+     * @param algorithmName nome do algoritmo (ex.: {@code "MOEADD"},
+     *                      {@code "GWASFGA"})
+     * @return {@code true} se habilitada para o algoritmo ou globalmente
+     */
+    public static boolean isReplaceZeroWeightsEnabled(String algorithmName) {
+        return isScopingPropertyEnabledForAlgorithm(REPLACE_ZERO_WEIGHTS_PROPERTY, algorithmName);
+    }
+
+    /**
+     * Executa o procedimento controlado de substituição de coordenadas zero
+     * ({@code 0.0 -> zeroReplacement})
+     * respeitando a propriedade JVM {@code -DreplaceZeroWeights=false} (desativada
+     * por padrão).
+     * Se a propriedade estiver desativada ({@code false}), não gera arquivo em
+     * {@code outputDir}.
+     *
+     * @param sourceFile      arquivo de pesos original (nunca modificado)
+     * @param outputDir       diretório de saída para variantes geradas (ex.:
+     *                        {@code resources/weightVectorFiles/weights_gen})
+     * @param zeroReplacement valor positivo substituto para coordenadas zero (ex.:
+     *                        {@code 1.0e-5})
      * @return {@link ZeroReplacementReport} detalhado
      */
     public static ZeroReplacementReport replaceZeroWeightsIfEnabled(
@@ -1030,18 +1209,28 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Executa de forma controlada a inspeção e substituição opcional de coordenadas zero
-     * ({@code 0.0 -> zeroReplacement}) a partir de {@code sourceFile}, gravando a variante em
-     * {@code outputDir} somente quando {@code enabled == true}, sem jamais modificar {@code sourceFile}.
-     * Preserva dimensionalidade, cardinalidade e ordem dos vetores, registra a quantidade de componentes
-     * alterados e a soma de cada vetor após a substituição, e valida finitude, não negatividade e
+     * Executa de forma controlada a inspeção e substituição opcional de coordenadas
+     * zero
+     * ({@code 0.0 -> zeroReplacement}) a partir de {@code sourceFile}, gravando a
+     * variante em
+     * {@code outputDir} somente quando {@code enabled == true}, sem jamais
+     * modificar {@code sourceFile}.
+     * Preserva dimensionalidade, cardinalidade e ordem dos vetores, registra a
+     * quantidade de componentes
+     * alterados e a soma de cada vetor após a substituição, e valida finitude, não
+     * negatividade e
      * ausência de duplicatas inesperadas.
      *
-     * @param sourceFile arquivo de pesos de origem (somente leitura)
-     * @param outputDir diretório de destino para o arquivo gerado (ex.: {@code resources/weightVectorFiles/weights_gen})
-     * @param zeroReplacement valor positivo substituto para coordenadas zero (ex.: {@code 1.0e-5})
-     * @param enabled se {@code true}, grava o arquivo com zeros substituídos em {@code outputDir}; se {@code false}, não grava
-     * @return {@link ZeroReplacementReport} com todas as métricas e relatório de validação
+     * @param sourceFile      arquivo de pesos de origem (somente leitura)
+     * @param outputDir       diretório de destino para o arquivo gerado (ex.:
+     *                        {@code resources/weightVectorFiles/weights_gen})
+     * @param zeroReplacement valor positivo substituto para coordenadas zero (ex.:
+     *                        {@code 1.0e-5})
+     * @param enabled         se {@code true}, grava o arquivo com zeros
+     *                        substituídos em {@code outputDir}; se {@code false},
+     *                        não grava
+     * @return {@link ZeroReplacementReport} com todas as métricas e relatório de
+     *         validação
      */
     public static ZeroReplacementReport replaceZeroWeights(
             Path sourceFile, Path outputDir, double zeroReplacement, boolean enabled) {
@@ -1111,8 +1300,8 @@ public final class ReferenceSetValidator {
         }
 
         double sumTol = Math.max(2e-4, dimension * zeroReplacement + 1e-5);
-        SetValidationReport validationReport =
-                validateSimplexSet(processedVectors, vectorCount, dimension, sumTol, 1e-7);
+        SetValidationReport validationReport = validateSimplexSet(processedVectors, vectorCount, dimension, sumTol,
+                1e-7);
 
         Path outputFile = null;
         boolean generated = false;
@@ -1120,6 +1309,15 @@ public final class ReferenceSetValidator {
             if (outputDir == null) {
                 throw new IllegalArgumentException(
                         "O diretório de saída (outputDir) não pode ser nulo quando enabled=true.");
+            }
+            assertNotProtectedLegacyDirectory(
+                    outputDir, "Proibido gravar arquivo dentro de diretórios protegidos legados: ");
+            Path dirName = outputDir.toAbsolutePath().normalize().getFileName();
+            if (dirName != null && "weights_gen".equals(dirName.toString())) {
+                throw new IllegalArgumentException(
+                        "Proibido gravar variantes com substituição de zero em weights_gen/; "
+                                + "esse diretório preserva vetores puramente analíticos (use weights_lowzero_gen/): "
+                                + outputDir);
             }
             try {
                 Files.createDirectories(outputDir);
@@ -1178,20 +1376,26 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Verifica se a persistência opcional de pontos de referência do NSGA-III está habilitada via
-     * propriedade JVM {@code -DpersistReferencePoints=true}. Por padrão, retorna {@code false}.
+     * Verifica se a persistência opcional de pontos de referência do NSGA-III está
+     * habilitada via
+     * propriedade JVM {@code -DpersistReferencePoints=true}. Por padrão, retorna
+     * {@code false}.
      *
-     * @return {@code true} se {@code -DpersistReferencePoints=true}, {@code false} caso contrário
+     * @return {@code true} se {@code -DpersistReferencePoints=true}, {@code false}
+     *         caso contrário
      */
     public static boolean isPersistReferencePointsEnabled() {
         return Boolean.parseBoolean(System.getProperty(PERSIST_REFERENCE_POINTS_PROPERTY, "false"));
     }
 
     /**
-     * Verifica se a persistência opcional de direções de referência do RVEA está habilitada via
-     * propriedade JVM {@code -DpersistReferenceDirections=true}. Por padrão, retorna {@code false}.
+     * Verifica se a persistência opcional de direções de referência do RVEA está
+     * habilitada via
+     * propriedade JVM {@code -DpersistReferenceDirections=true}. Por padrão,
+     * retorna {@code false}.
      *
-     * @return {@code true} se {@code -DpersistReferenceDirections=true}, {@code false} caso contrário
+     * @return {@code true} se {@code -DpersistReferenceDirections=true},
+     *         {@code false} caso contrário
      */
     public static boolean isPersistReferenceDirectionsEnabled() {
         return Boolean.parseBoolean(
@@ -1199,12 +1403,16 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Extrai uma cópia profunda (somente leitura) dos pontos de referência efetivamente instanciados
-     * dentro de uma instância de {@code NSGAIII}, sem alterar o estado interno do algoritmo.
+     * Extrai uma cópia profunda (somente leitura) dos pontos de referência
+     * efetivamente instanciados
+     * dentro de uma instância de {@code NSGAIII}, sem alterar o estado interno do
+     * algoritmo.
      *
-     * @param nsgaiii instância de {@code org.uma.jmetal.algorithm.multiobjective.nsgaiii.NSGAIII}
-     * @param m número de objetivos esperado
-     * @return matriz {@code double[N][m]} com cópia independente das posições dos pontos
+     * @param nsgaiii instância de
+     *                {@code org.uma.jmetal.algorithm.multiobjective.nsgaiii.NSGAIII}
+     * @param m       número de objetivos esperado
+     * @return matriz {@code double[N][m]} com cópia independente das posições dos
+     *         pontos
      */
     @SuppressWarnings("unchecked")
     public static double[][] extractReferencePointsFromNsgaIII(Object nsgaiii, int m) {
@@ -1239,11 +1447,12 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Persiste opcionalmente os pontos de referência do NSGA-III caso {@code -DpersistReferencePoints=true},
+     * Persiste opcionalmente os pontos de referência do NSGA-III caso
+     * {@code -DpersistReferencePoints=true},
      * usando o diretório padrão {@code resources/referencePoints/nsgaiii/}.
      *
-     * @param vectors matriz de pontos de referência (não é modificada)
-     * @param m número de objetivos
+     * @param vectors        matriz de pontos de referência (não é modificada)
+     * @param m              número de objetivos
      * @param outerDivisions divisões externas H1
      * @param innerDivisions divisões internas H2 (use 0 para 1 camada)
      * @return {@link ReferencePersistenceReport}
@@ -1262,11 +1471,12 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Persiste opcionalmente as direções de referência do RVEA caso {@code -DpersistReferenceDirections=true},
+     * Persiste opcionalmente as direções de referência do RVEA caso
+     * {@code -DpersistReferenceDirections=true},
      * usando o diretório padrão {@code resources/referencePoints/rvea/}.
      *
-     * @param vectors lista de vetores de direção (não é modificada)
-     * @param m número de objetivos
+     * @param vectors        lista de vetores de direção (não é modificada)
+     * @param m              número de objetivos
      * @param outerDivisions divisões externas H1
      * @param innerDivisions divisões internas H2 (use 0 para 1 camada)
      * @return {@link ReferencePersistenceReport}
@@ -1286,31 +1496,44 @@ public final class ReferenceSetValidator {
     }
 
     /**
-     * Persiste de forma controlada um conjunto de pontos/direções de referência em formato CSV:
-     * cabeçalho {@code index,f1,f2,...,fm}, separador vírgula e precisão de 15 casas decimais
+     * Persiste de forma controlada um conjunto de pontos/direções de referência em
+     * formato CSV:
+     * cabeçalho {@code index,f1,f2,...,fm}, separador vírgula e precisão de 15
+     * casas decimais
      * ({@code %.15f} em {@link Locale#US}).
      * <p>
      * Regras de proteção:
      * <ul>
-     *   <li>Opera sobre uma cópia profunda dos vetores, garantindo que o array original jamais seja alterado.</li>
-     *   <li>Se {@code enabled == false}, retorna imediatamente sem tocar no sistema de arquivos.</li>
-     *   <li>Nunca sobrescreve um arquivo existente automaticamente: se o arquivo alvo já existir com
-     *       conteúdo idêntico (ex.: múltiplas runs da mesma configuração), reutiliza-o sem regravar
-     *       quando {@code failIfDifferentExists == false}; se o arquivo existente tiver conteúdo
-     *       distinto, lança {@link IllegalStateException} (quando {@code failIfDifferentExists == true})
-     *       ou grava em um novo arquivo com sufixo incremental {@code _run1.csv}, {@code _run2.csv}, etc.,
-     *       preservando intacto o arquivo preexistente.</li>
+     * <li>Opera sobre uma cópia profunda dos vetores, garantindo que o array
+     * original jamais seja alterado.</li>
+     * <li>Se {@code enabled == false}, retorna imediatamente sem tocar no sistema
+     * de arquivos.</li>
+     * <li>Nunca sobrescreve um arquivo existente automaticamente: se o arquivo alvo
+     * já existir com
+     * conteúdo idêntico (ex.: múltiplas runs da mesma configuração), reutiliza-o
+     * sem regravar
+     * quando {@code failIfDifferentExists == false}; se o arquivo existente tiver
+     * conteúdo
+     * distinto, lança {@link IllegalStateException} (quando
+     * {@code failIfDifferentExists == true})
+     * ou grava em um novo arquivo com sufixo incremental {@code _run1.csv},
+     * {@code _run2.csv}, etc.,
+     * preservando intacto o arquivo preexistente.</li>
      * </ul>
      *
-     * @param vectors matriz de vetores [N][m]
-     * @param m número de objetivos
-     * @param outerDivisions divisões da camada externa H1
-     * @param innerDivisions divisões da camada interna H2 (0 para camada única)
-     * @param algorithmPrefix prefixo do algoritmo ({@code "NSGAIII"} ou {@code "RVEA"})
-     * @param outputDir diretório de destino
-     * @param enabled se verdadeiro, executa a persistência
-     * @param failIfDifferentExists se verdadeiro, lança exceção caso já exista arquivo com conteúdo diferente;
-     *     se falso, cria arquivo com sufixo {@code _runN.csv} sem sobrescrever o existente
+     * @param vectors               matriz de vetores [N][m]
+     * @param m                     número de objetivos
+     * @param outerDivisions        divisões da camada externa H1
+     * @param innerDivisions        divisões da camada interna H2 (0 para camada
+     *                              única)
+     * @param algorithmPrefix       prefixo do algoritmo ({@code "NSGAIII"} ou
+     *                              {@code "RVEA"})
+     * @param outputDir             diretório de destino
+     * @param enabled               se verdadeiro, executa a persistência
+     * @param failIfDifferentExists se verdadeiro, lança exceção caso já exista
+     *                              arquivo com conteúdo diferente;
+     *                              se falso, cria arquivo com sufixo
+     *                              {@code _runN.csv} sem sobrescrever o existente
      * @return {@link ReferencePersistenceReport}
      */
     public static ReferencePersistenceReport persistReferenceSetCsv(
@@ -1341,11 +1564,12 @@ public final class ReferenceSetValidator {
         if (outputDir == null) {
             throw new IllegalArgumentException("Diretório de saída não pode ser nulo.");
         }
+        assertNotProtectedLegacyDirectory(
+                outputDir, "Proibido gravar arquivo dentro de diretórios protegidos legados: ");
 
-        String baseFileName =
-                String.format(
-                        "%s_m%d_H1%d_H2%d.csv",
-                        algorithmPrefix, m, outerDivisions, Math.max(0, innerDivisions));
+        String baseFileName = String.format(
+                "%s_m%d_H1%d_H2%d.csv",
+                algorithmPrefix, m, outerDivisions, Math.max(0, innerDivisions));
         String csvContent = formatReferenceSetCsv(safeCopy, m);
 
         try {
@@ -1401,7 +1625,10 @@ public final class ReferenceSetValidator {
         }
     }
 
-    /** Formata uma matriz de vetores [N][m] como CSV com cabeçalho {@code index,f1,...,fm} e 15 casas decimais. */
+    /**
+     * Formata uma matriz de vetores [N][m] como CSV com cabeçalho
+     * {@code index,f1,...,fm} e 15 casas decimais.
+     */
     public static String formatReferenceSetCsv(double[][] vectors, int m) {
         StringBuilder sb = new StringBuilder();
         sb.append("index");
@@ -1419,7 +1646,10 @@ public final class ReferenceSetValidator {
         return sb.toString();
     }
 
-    /** Realiza cópia profunda de uma lista de vetores {@code List<double[]>} para matriz {@code double[][]}. */
+    /**
+     * Realiza cópia profunda de uma lista de vetores {@code List<double[]>} para
+     * matriz {@code double[][]}.
+     */
     public static double[][] deepCopyVectors(List<double[]> vectors) {
         if (vectors == null) {
             return new double[0][0];
@@ -1445,7 +1675,10 @@ public final class ReferenceSetValidator {
         return copy;
     }
 
-    /** Calcula a distância euclidiana (norma L2) entre dois vetores de mesma dimensão. */
+    /**
+     * Calcula a distância euclidiana (norma L2) entre dois vetores de mesma
+     * dimensão.
+     */
     public static double euclideanDistance(double[] a, double[] b) {
         double sumSq = 0.0;
         for (int i = 0; i < a.length; i++) {
@@ -1455,7 +1688,10 @@ public final class ReferenceSetValidator {
         return Math.sqrt(sumSq);
     }
 
-    /** Calcula a distância de Chebyshev (norma L-infinito / erro máximo por coordenada) entre dois vetores. */
+    /**
+     * Calcula a distância de Chebyshev (norma L-infinito / erro máximo por
+     * coordenada) entre dois vetores.
+     */
     public static double chebyshevDistance(double[] a, double[] b) {
         double maxDiff = 0.0;
         for (int i = 0; i < a.length; i++) {
@@ -1481,6 +1717,403 @@ public final class ReferenceSetValidator {
             }
         }
         return dim;
+    }
+
+    /** Diretório padrão de vetores de pesos oficiais do jMetal. */
+    public static final Path DEFAULT_OFFICIAL_WEIGHTS_DIR = Path.of("resources", "weightVectorFiles");
+
+    /** Diretório padrão de vetores de pesos gerados canonicamente. */
+    /**
+     * Diretório padrão dos recursos gerados puramente analíticos de pesos (preserva
+     * 0.0).
+     */
+    public static final Path DEFAULT_GENERATED_WEIGHTS_DIR = Path.of("resources", "weightVectorFiles", "weights_gen");
+
+    /**
+     * Diretório exclusivo para variantes de pesos com substituição de zero (0.0 ->
+     * 1e-5).
+     */
+    public static final Path DEFAULT_LOWZERO_WEIGHTS_DIR = Path.of("resources", "weightVectorFiles",
+            "weights_lowzero_gen");
+
+    /**
+     * Informa se o {@code AbstractMOEAD.initializeUniformWeight()} do jMetal 7.8
+     * gera os vetores de
+     * pesos uniformes diretamente em memória para a combinação informada de
+     * objetivos e tamanho populacional.
+     *
+     * @param m              número de objetivos
+     * @param populationSize tamanho da população
+     * @return {@code true} se \(m = 2\) e \(N \le 300\); {@code false} caso
+     *         contrário
+     */
+    public static boolean isMoeadWeightGeneratedInMemory(int m, int populationSize) {
+        return m == 2 && populationSize <= 300;
+    }
+
+    /**
+     * Grava uma matriz de vetores de pesos em formato compatível com o jMetal
+     * (tab-separated, 15 casas decimais).
+     *
+     * @param targetFile caminho do arquivo de destino
+     * @param weights    matriz de pesos [N][m]
+     * @throws IOException em caso de erro de I/O
+     */
+    public static void writeWeightVectorFile(Path targetFile, double[][] weights) throws IOException {
+        Objects.requireNonNull(targetFile, "targetFile must not be null");
+        Objects.requireNonNull(weights, "weights must not be null");
+        assertNotProtectedLegacyDirectory(
+                targetFile, "Proibido gravar arquivo dentro de diretórios protegidos legados: ");
+        if (targetFile.getParent() != null) {
+            Files.createDirectories(targetFile.getParent());
+        }
+        Path tempFile = Files.createTempFile(
+                targetFile.getParent() != null ? targetFile.getParent() : Path.of("."),
+                "tmp-weight-",
+                ".dat");
+        try (BufferedWriter writer = Files.newBufferedWriter(tempFile, StandardCharsets.UTF_8)) {
+            for (double[] row : weights) {
+                StringBuilder sb = new StringBuilder();
+                for (int j = 0; j < row.length; j++) {
+                    if (j > 0) {
+                        sb.append("\t");
+                    }
+                    sb.append(String.format(java.util.Locale.US, "%.15e", row[j]));
+                }
+                sb.append(System.lineSeparator());
+                writer.write(sb.toString());
+            }
+        }
+        Files.move(tempFile, targetFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+    }
+
+    /**
+     * Resolve canonicamente o arquivo de vetores de pesos respeitando a pureza
+     * analítica de
+     * {@code weights_gen/} e isolando variantes com substituição de zeros em
+     * {@code weights_lowzero_gen/} quando a flag estiver ativa globalmente.
+     */
+    public static ResolvedWeightArtifact resolveCanonicalWeightFile(int m, int popSize, Path baseDir) {
+        return resolveCanonicalWeightFile(m, popSize, baseDir, isReplaceZeroWeightsEnabled());
+    }
+
+    /**
+     * Resolve canonicamente o arquivo de vetores de pesos para um algoritmo
+     * específico, ativando
+     * {@code weights_lowzero_gen/} somente se {@code -DreplaceZeroWeights} estiver
+     * habilitada para
+     * {@code algorithmName} ou globalmente.
+     */
+    public static ResolvedWeightArtifact resolveCanonicalWeightFile(
+            int m, int popSize, Path baseDir, String algorithmName) {
+        return resolveCanonicalWeightFile(m, popSize, baseDir, isReplaceZeroWeightsEnabled(algorithmName));
+    }
+
+    /**
+     * Resolve canonicamente o arquivo de vetores de pesos:
+     * <ol>
+     * <li>Quando {@code useLowZero == false} (padrão):
+     *   <ol type="a">
+     *     <li>Recurso oficial válido em {@code resources/weightVectorFiles/W{m}D_{N}.dat};</li>
+     *     <li>Recurso puramente analítico em {@code resources/weightVectorFiles/weights_gen/W{m}D_{N}.dat}
+     *         (preservando {@code 0.0} exato);</li>
+     *     <li>Geração puramente analítica persistida e validada em {@code weights_gen/W{m}D_{N}.dat}.</li>
+     *   </ol>
+     * </li>
+     * <li>Quando {@code useLowZero == true}:
+     *   <ol type="a">
+     *     <li>Variante existente válida em {@code resources/weightVectorFiles/weights_lowzero_gen/W{m}D_{N}.dat};</li>
+     *     <li>Derivação/geração com substituição {@code 0 -> 1e-5} gravada estritamente em
+     *         {@code weights_lowzero_gen/W{m}D_{N}.dat}, sem modificar {@code official} nem {@code weights_gen/}.</li>
+     *   </ol>
+     * </li>
+     * </ol>
+     *
+     * @param m          número de objetivos
+     * @param popSize    tamanho da população
+     * @param baseDir    diretório raiz base (ou {@code null} para raiz do projeto)
+     * @param useLowZero se {@code true}, resolve/gera exclusivamente na pasta isolada {@code weights_lowzero_gen/}
+     * @return {@link ResolvedWeightArtifact} validado
+     */
+
+    public static ResolvedWeightArtifact resolveCanonicalWeightFile(
+            int m, int popSize, Path baseDir, boolean useLowZero) {
+        if (m < 2) {
+            throw new IllegalArgumentException("O número de objetivos m deve ser >= 2, mas foi: " + m);
+        }
+        if (popSize < 1) {
+            throw new IllegalArgumentException("O tamanho da população deve ser >= 1, mas foi: " + popSize);
+        }
+
+        Path officialDir;
+        Path genDir;
+        Path lowZeroDir;
+        if (baseDir != null) {
+            if (baseDir.endsWith("weightVectorFiles")) {
+                officialDir = baseDir;
+                genDir = baseDir.resolve("weights_gen");
+                lowZeroDir = baseDir.resolve("weights_lowzero_gen");
+            } else {
+                officialDir = baseDir.resolve(DEFAULT_OFFICIAL_WEIGHTS_DIR);
+                genDir = baseDir.resolve(DEFAULT_GENERATED_WEIGHTS_DIR);
+                lowZeroDir = baseDir.resolve(DEFAULT_LOWZERO_WEIGHTS_DIR);
+            }
+        } else {
+            officialDir = DEFAULT_OFFICIAL_WEIGHTS_DIR;
+            genDir = DEFAULT_GENERATED_WEIGHTS_DIR;
+            lowZeroDir = DEFAULT_LOWZERO_WEIGHTS_DIR;
+        }
+        String fileName = String.format("W%dD_%d.dat", m, popSize);
+        Path officialFile = officialDir.resolve(fileName);
+
+        if (useLowZero) {
+            Path lowZeroFile = lowZeroDir.resolve(fileName);
+            if (Files.isRegularFile(lowZeroFile)) {
+                try {
+                    double[][] weights = validateMoeadWeightFile(
+                            lowZeroFile, m, popSize, 2e-4, DEFAULT_TOLERANCE);
+                    SetValidationReport report = validateSimplexSet(
+                            weights, popSize, m, 2e-4, DEFAULT_TOLERANCE);
+                    if (report.allStrictlyPositive()) {
+                        String sha256 = computeSha256Hex(lowZeroFile);
+                        return new ResolvedWeightArtifact(
+                                m, popSize, lowZeroFile, sha256, "WEIGHTS_LOWZERO_GEN", false,
+                                weights.length, weights.length);
+                    }
+                } catch (Exception ignored) {
+                    // Variante inválida: regera na pasta isolada weights_lowzero_gen/
+                }
+            }
+
+            try {
+                int h1 = StaticParams.getOuterDivisions(m);
+                int h2 = StaticParams.getInnerDivisions(m);
+                int expectedCanonicalPop = StaticParams.getPopulationSize(m);
+                if (popSize != expectedCanonicalPop) {
+                    throw new IllegalArgumentException(String.format(
+                            "Arquivo de pesos inexistente ou ilegível: '%s' (popSize=%d difere do tamanho canônico %d para m=%d)",
+                            fileName, popSize, expectedCanonicalPop, m));
+                }
+                if (Files.isRegularFile(officialFile)
+                        && isOfficialJMetalUncontractedTwoLayerSize(m, popSize) < 0) {
+                    replaceZeroWeights(officialFile, lowZeroDir, DEFAULT_ZERO_REPLACEMENT, true);
+                } else {
+                    double[][] lowZeroWeights = generateZeroReplacedCanonical(
+                            m, h1, h2, DEFAULT_ZERO_REPLACEMENT);
+                    if (lowZeroWeights.length != popSize) {
+                        throw new IllegalArgumentException(String.format(
+                                "Arquivo de pesos inexistente ou ilegível: geração low-zero produziu %d pontos, mas esperava %d para m=%d",
+                                lowZeroWeights.length, popSize, m));
+                    }
+                    writeWeightVectorFile(lowZeroFile, lowZeroWeights);
+                }
+                double[][] weights = validateMoeadWeightFile(
+                        lowZeroFile, m, popSize, 2e-4, DEFAULT_TOLERANCE);
+                String sha256 = computeSha256Hex(lowZeroFile);
+                return new ResolvedWeightArtifact(
+                        m, popSize, lowZeroFile, sha256, "WEIGHTS_LOWZERO_GEN", false,
+                        weights.length, weights.length);
+            } catch (IOException e) {
+                throw new IllegalArgumentException(
+                        "Arquivo de pesos inexistente ou ilegível para m=" + m + ", N=" + popSize, e);
+            }
+        }
+
+        if (Files.isRegularFile(officialFile)) {
+            try {
+                double[][] weights = validateMoeadWeightFile(
+                        officialFile, m, popSize, 2e-4, DEFAULT_TOLERANCE);
+                String sha256 = computeSha256Hex(officialFile);
+                return new ResolvedWeightArtifact(
+                        m, popSize, officialFile, sha256, "OFFICIAL", false, weights.length, weights.length);
+            } catch (Exception ignored) {
+                // Candidato oficial inválido: avança na hierarquia
+            }
+        }
+
+        Path genFile = genDir.resolve(fileName);
+        if (Files.isRegularFile(genFile)) {
+            try {
+                // weights_gen/ exige pureza analítica estrita: soma 1.0 (tol=1e-6) e preservação de zeros exatos
+                double[][] weights = validateMoeadWeightFile(
+                        genFile, m, popSize, DEFAULT_TOLERANCE, DEFAULT_TOLERANCE);
+                SetValidationReport report = validateSimplexSet(
+                        weights, popSize, m, DEFAULT_TOLERANCE, DEFAULT_TOLERANCE);
+                if (!report.allStrictlyPositive()) {
+                    String sha256 = computeSha256Hex(genFile);
+                    return new ResolvedWeightArtifact(
+                            m, popSize, genFile, sha256, "WEIGHTS_GEN", false, weights.length, weights.length);
+                }
+            } catch (Exception ignored) {
+                // Candidato em weights_gen/ contaminado ou inválido: regera em forma puramente analítica
+            }
+        }
+
+        // 3. Geração programática puramente analítica (preservando 0.0) em weights_gen/
+        try {
+            int h1 = StaticParams.getOuterDivisions(m);
+            int h2 = StaticParams.getInnerDivisions(m);
+            int expectedCanonicalPop = StaticParams.getPopulationSize(m);
+            if (popSize != expectedCanonicalPop) {
+                throw new IllegalArgumentException(String.format(
+                        "Arquivo de pesos inexistente ou ilegível: '%s' (popSize=%d difere do tamanho canônico %d para m=%d)",
+                        fileName, popSize, expectedCanonicalPop, m));
+            }
+            double[][] pureWeights = generateCanonicalTwoLayers(m, h1, h2);
+            if (pureWeights.length != popSize) {
+                throw new IllegalArgumentException(String.format(
+                        "Arquivo de pesos inexistente ou ilegível: geração analítica produziu %d pontos, mas esperava %d para m=%d (H1=%d, H2=%d)",
+                        pureWeights.length, popSize, m, h1, h2));
+            }
+            writeWeightVectorFile(genFile, pureWeights);
+            double[][] weights = validateMoeadWeightFile(
+                    genFile, m, popSize, DEFAULT_TOLERANCE, DEFAULT_TOLERANCE);
+            String sha256 = computeSha256Hex(genFile);
+            return new ResolvedWeightArtifact(
+                    m, popSize, genFile, sha256, "GENERATED_ON_DEMAND", false, weights.length, weights.length);
+        } catch (IOException e) {
+            throw new IllegalArgumentException(
+                    "Arquivo de pesos inexistente ou ilegível para m=" + m + ", N=" + popSize, e);
+        }
+    }
+
+    /**
+     * Exporta o manifesto canônico consolidado de frentes de referência e arquivos
+     * de pesos
+     * para o caminho indicado {@code outputCsv}, sem qualquer acesso ou referência
+     * a pastas legadas.
+     *
+     * @param outputCsv caminho do arquivo CSV a ser gerado
+     * @param baseDir   diretório base do projeto (ou {@code null} para raiz do
+     *                  projeto)
+     * @return lista de entradas do manifesto
+     */
+    /**
+     * Garante que nenhum artefato seja gravado nos diretórios legados protegidos
+     * ({@code MOEAD_Weights/}, {@code pareto_fronts/} ou {@code pareto/}).
+     */
+    private static void assertNotProtectedLegacyDirectory(Path targetPath, String messagePrefix) {
+        Path normOut = targetPath.toAbsolutePath().normalize();
+        Path[] protectedDirs = new Path[] {
+                Path.of("MOEAD_Weights").toAbsolutePath().normalize(),
+                Path.of("pareto_fronts").toAbsolutePath().normalize(),
+                Path.of("pareto").toAbsolutePath().normalize()
+        };
+        for (Path protectedDir : protectedDirs) {
+            if (normOut.startsWith(protectedDir)) {
+                throw new IllegalArgumentException(messagePrefix + targetPath);
+            }
+        }
+        for (Path segment : normOut) {
+            String name = segment.toString();
+            if ("MOEAD_Weights".equals(name) || "pareto_fronts".equals(name) || "pareto".equals(name)) {
+                throw new IllegalArgumentException(messagePrefix + targetPath);
+            }
+        }
+    }
+
+    public static List<ArtifactManifestEntry> exportActiveArtifactManifestCsv(Path outputCsv, Path baseDir) {
+        Objects.requireNonNull(outputCsv, "outputCsv must not be null");
+        assertNotProtectedLegacyDirectory(
+                outputCsv, "Proibido gravar manifesto dentro de diretórios protegidos legados: ");
+        Path normOut = outputCsv.toAbsolutePath().normalize();
+
+        List<ArtifactManifestEntry> entries = new ArrayList<>();
+        int[] activeDimensions = new int[] { 2, 3, 5, 8, 10, 15 };
+
+        // 1. Arquivos de pesos do MOEA/DD
+        for (int m : activeDimensions) {
+            int popSize = StaticParams.getPopulationSize(m);
+            ResolvedWeightArtifact rwa = resolveCanonicalWeightFile(m, popSize, baseDir, "MOEADD");
+            long sizeBytes = 0;
+            try {
+                if (rwa.path() != null && Files.isRegularFile(rwa.path())) {
+                    sizeBytes = Files.size(rwa.path());
+                }
+            } catch (IOException ignored) {
+            }
+
+            String relPath = (rwa.path() != null)
+                    ? ((baseDir != null && rwa.path().startsWith(baseDir))
+                            ? baseDir.relativize(rwa.path()).toString().replace('\\', '/')
+                            : rwa.path().toString().replace('\\', '/'))
+                    : "IN_MEMORY";
+
+            String consumptionMode = isMoeadWeightGeneratedInMemory(m, popSize)
+                    ? "IN_MEMORY_GENERATED_BY_JMETAL_MOEAD"
+                    : "DISK_FILE_READ";
+
+            entries.add(new ArtifactManifestEntry(
+                    "WEIGHT_VECTOR",
+                    String.format("W%dD_%d", m, popSize),
+                    "MOEADD",
+                    m,
+                    "CANONICAL_RESOURCE_PRIORITY",
+                    rwa.sourceCategory(),
+                    relPath,
+                    sizeBytes,
+                    rwa.totalVectors(),
+                    rwa.uniqueVectors(),
+                    rwa.sha256(),
+                    consumptionMode));
+        }
+
+        // 2. Frentes WFG (WFG1..9) e DTLZ (DTLZ1..7)
+        boolean useLowZeroFronts = ParetoFrontValidator.isReplaceZeroFrontsEnabled();
+        String[] frontProblems = new String[] {
+                "WFG1", "WFG2", "WFG3", "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9",
+                "DTLZ1", "DTLZ2", "DTLZ3", "DTLZ4", "DTLZ5", "DTLZ6", "DTLZ7"
+        };
+        for (String prob : frontProblems) {
+            for (int m : activeDimensions) {
+                ResolvedFrontArtifact rfa = ParetoFrontValidator.resolveCanonicalFrontArtifact(
+                        prob, m, baseDir, useLowZeroFronts, true);
+                long sizeBytes = 0;
+                try {
+                    if (rfa.path() != null && Files.isRegularFile(rfa.path())) {
+                        sizeBytes = Files.size(rfa.path());
+                    }
+                } catch (IOException ignored) {
+                }
+
+                String relPath = (rfa.path() != null)
+                        ? ((baseDir != null && rfa.path().startsWith(baseDir))
+                                ? baseDir.relativize(rfa.path()).toString().replace('\\', '/')
+                                : rfa.path().toString().replace('\\', '/'))
+                        : "UNKNOWN";
+
+                entries.add(new ArtifactManifestEntry(
+                        "REFERENCE_FRONT",
+                        String.format("%s.%dD", prob, m),
+                        prob,
+                        m,
+                        "CANONICAL_RESOURCE_PRIORITY",
+                        rfa.sourceCategory(),
+                        relPath,
+                        sizeBytes,
+                        rfa.totalPoints(),
+                        rfa.uniquePoints(),
+                        rfa.sha256(),
+                        "DISK_FILE_READ"));
+            }
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(ArtifactManifestEntry.CSV_HEADER).append(System.lineSeparator());
+        for (ArtifactManifestEntry e : entries) {
+            sb.append(e.toCsvRow()).append(System.lineSeparator());
+        }
+
+        try {
+            if (normOut.getParent() != null) {
+                Files.createDirectories(normOut.getParent());
+            }
+            Files.writeString(normOut, sb.toString(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new IllegalStateException("Falha ao exportar manifesto de artefatos em: " + normOut, e);
+        }
+
+        return entries;
     }
 
     private static boolean allFinite(double[][] set) {

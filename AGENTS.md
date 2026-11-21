@@ -17,7 +17,7 @@ Este arquivo `AGENTS.md`, contém as regras que estabelecem as diretrizes obriga
 - Priorize alterações pequenas, coesas e compatíveis com a arquitetura existente.
 - Não adicione, remova ou edite elementos de código sem justificativa e autorização compatíveis com o escopo da tarefa.
 - Não mexa no git do projeto, no máximo o utilize para checagens e leituras.
-- `MOEAD_Weights/` e `pareto_fronts/csv/` são diretórios protegidos. Não modifique, substitua, sobrescreva, exclua, renomeie ou reformate seus arquivos. A leitura desses dados legados são permitidas.
+- `MOEAD_Weights/`, `pareto_fronts/` (incluindo `pareto_fronts/csv/`) e `pareto/` são diretórios protegidos. Não modifique, substitua, sobrescreva, exclua, renomeie ou reformate seus arquivos. A leitura desses dados legados são permitidas.
 - A pasta WFGStudy/ é reservada exclusivamente ao armazenamento dos resultados das execuções experimentais finais, sendo vedado armazenar resultados intermediários, testes, experimentos exploratórios ou arquivos temporários em suas subpastas, exceto na subpasta não versionada WFGStudy/tests/, destinada exclusivamente a resultados intermediários, testes, experimentos exploratórios, validações.
 - Não remova nem altere arquivos existentes de resultados sem autorização explícita.
 - Não confunda vetores de pesos do MOEA/DD, pontos ou direções de referência do NSGA-III e frentes de Pareto.

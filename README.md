@@ -462,6 +462,27 @@ Abaixo estão registradas todas as intervenções de engenharia de software e aj
    - Criada a suíte de testes [`ReferenceFrontCanonicalPriorityTest.java`](src/test/java/br/usp/lti/newmoea/qualityindicator/ReferenceFrontCanonicalPriorityTest.java) (6 testes, 100% aprovados).
    - Executada a suíte de testes completa do projeto via `mvn test`: **378 testes executados, 0 falhas, 0 erros** (BUILD SUCCESS).
 
+## Alterações 11/11/2026 - 14:55
+
+1. **Refatoração Arquitetural e Resolução Canônica de Artefatos (Fase 4 / T25–T31)**:
+   - **Eliminação Completa de Fallbacks Operacionais**:
+     - Removido qualquer acesso ou tentativa de busca aos diretórios legados protegidos (`MOEAD_Weights/` e `pareto_fronts/csv/`) em [`WFGStudy.java`](src/main/java/br/usp/lti/newmoea/study/WFGStudy.java), [`ParetoFrontValidator.java`](src/main/java/br/usp/lti/newmoea/util/ParetoFrontValidator.java), [`PerformanceProfiler.java`](src/main/java/br/usp/lti/newmoea/util/PerformanceProfiler.java) e [`EvaluationBudgetProblem.java`](src/main/java/br/usp/lti/newmoea/util/EvaluationBudgetProblem.java).
+     - Os arquivos físicos históricos permanecem estritamente preservados e protegidos contra modificações.
+   - **Resolução e Geração Canônica de Pesos do MOEA/DD**:
+     - Implementada a resolução canônica em [`ReferenceSetValidator.resolveCanonicalWeightFile`](src/main/java/br/usp/lti/newmoea/util/ReferenceSetValidator.java): (1) oficial em `resources/weightVectorFiles/`, (2) gerado em `weights_gen/`, (3) geração programática sob demanda gravando em `weights_gen/` e validando os vetores segundo Das & Dennis zero-replaced ($0 \mapsto 10^{-5}$) para as dimensões $m=5$ ($N=210$) e $m=15$ ($N=135$).
+   - **Retornos Estruturados e Hermeticidade**:
+     - Criados os records imutáveis [`ResolvedFrontArtifact.java`](src/main/java/br/usp/lti/newmoea/util/ResolvedFrontArtifact.java) e [`ResolvedWeightArtifact.java`](src/main/java/br/usp/lti/newmoea/util/ResolvedWeightArtifact.java).
+     - Adicionado suporte a injeção explícita de `Path baseDir` para hermeticidade de testes unitários sem dependência de mutação global de `user.dir`.
+   - **Centralização de Primitivas Matemáticas e Manifesto**:
+     - Centralizada a comparação de dominância pura de Pareto em [`ParetoFrontValidator.dominanceComparison`](src/main/java/br/usp/lti/newmoea/util/ParetoFrontValidator.java), com delegação direta a partir de [`ResultFrontContract.java`](src/main/java/br/usp/lti/newmoea/util/ResultFrontContract.java).
+     - Migrada a regra de geração em memória jMetal 7.8 (`isMoeadWeightGeneratedInMemory`) e a exportação do manifesto consolidado de artefatos ([`ArtifactManifestEntry.java`](src/main/java/br/usp/lti/newmoea/util/ArtifactManifestEntry.java)) para [`ReferenceSetValidator.java`](src/main/java/br/usp/lti/newmoea/util/ReferenceSetValidator.java).
+   - **Exclusão Segura e Condicionada do `ArtifactResolver`**:
+     - Comprovada a ausência de referências reflexivas ou imports de produção. Criada a suíte substituta [`CanonicalArtifactResolutionAndManifestTest.java`](src/test/java/br/usp/lti/newmoea/util/CanonicalArtifactResolutionAndManifestTest.java).
+     - Excluídos definitivamente `ArtifactResolver.java` e `ArtifactResolverTest.java`.
+   - **Homologação e Testes**:
+     - Execução limpa completa via `mvn clean test`: **370 testes executados em 23 classes com 100% de aprovação (0 falhas, 0 erros, 0 ignorados)**.
+     - Campanha experimental mantida desativada, respeitando a integridade do protocolo.
+
 ## 8. Atividades Reservadas para a Próxima Etapa
 Conforme definido no planejamento:
 1. Ajustar os paramêtros e hiperparâmetros para aqueles definidos pela bibliografia, sejam específicos de algoritmos, como pontos de referências/divisões a detalhes comuns de algoritmos geneticos como população (os comuns devem ser baseados no algoritmo mais recente, já os especificos devem ser aqueles que seus artigos usaram).

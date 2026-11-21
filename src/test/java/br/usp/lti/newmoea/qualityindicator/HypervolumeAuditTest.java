@@ -29,6 +29,9 @@ import org.uma.jmetal.util.VectorUtils;
  * sobre as 68 frentes de referência ativas em {@code pareto_fronts/csv/}, comportamento em bytecode
  * de {@link PISAHypervolume}, {@link WFGHypervolume}, {@link Hypervolume3D} e
  * {@link NormalizedHypervolume}, e proteção contra divisão por zero em {@link NormalizeUtils}.
+ *
+ * <p><strong>Nota:</strong> Estes são testes de uma tarefa específica (T08) para verificação sobre
+ * frentes legadas protegidas e não devem ser usados como referência para execuções finais.
  */
 class HypervolumeAuditTest {
 
@@ -134,6 +137,7 @@ class HypervolumeAuditTest {
     @Test
     @DisplayName("T08: Ponto de referência domina estritamente (f_j < z_j) 100% dos pontos das 68 frentes ativas em pareto_fronts/csv/")
     void testReferencePointStrictlyDominatesAll68ActiveReferenceFronts() throws IOException {
+        // Pasta legada protegida usada apenas neste teste de verificação da tarefa T08 (não usar em execuções finais).
         int validatedFiles = 0;
 
         // 54 frentes WFG: WFG1..WFG9 em m in {2, 3, 5, 8, 10, 15}
@@ -166,6 +170,7 @@ class HypervolumeAuditTest {
     @Test
     @DisplayName("T08: Evidência empírica de que (2,...,2) para WFG e (1,...,1) para DTLZ7 falhavam no espaço bruto")
     void testUniformProvisionalReferencePointsFailInRawObjectiveSpace() throws IOException {
+        // Pasta legada protegida usada apenas como evidência empírica no teste da tarefa T08 (não usar em execuções finais).
         // WFG4.3D.csv possui max = [2.0, 4.0, 6.0]; logo (2.0, 2.0, 2.0) falha para f_2 e f_3
         double[][] wfg4Front3D = readCsvMatrix(Path.of("pareto_fronts", "csv", "WFG4.3D.csv"));
         int pointsOutsideUniform2 = 0;

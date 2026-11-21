@@ -40,6 +40,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Testes de auditoria de identidade algorítmica do FDEA, parâmetros internos do MOEA/DD
  * e comportamento dos algoritmos legados (Tarefa T14).
+ *
+ * <p><strong>Nota:</strong> Os testes abaixo que utilizam {@code MOEAD_Weights} são testes de uma
+ * tarefa específica (T14) para verificação de comportamento legado e não devem ser usados como
+ * referência para execuções finais.
  */
 class FdeaIdentityAndLegacyAuditTest {
 
@@ -220,6 +224,7 @@ class FdeaIdentityAndLegacyAuditTest {
     void testMoeaddInternalParametersAndTwoObjectiveWeightGenerationBehavior() throws Exception {
         // 1. Verifica m=2, N=100: AbstractMOEAD.initializeUniformWeight() ignora o arquivo .dat
         // quando m=2 e N <= 300, gerando pesos em memória com 0.0 nos extremos.
+        // NOTA: MOEAD_Weights é usado abaixo apenas como teste de verificação da tarefa T14 (não usar em execuções finais).
         Problem<DoubleSolution> wfg1M2 = new WFG1(2, 20, 2);
         MOEADD<DoubleSolution> moeaddM2 = (MOEADD<DoubleSolution>) new MOEADBuilder(wfg1M2, MOEADBuilder.Variant.MOEADD)
                 .setCrossover(new SBXCrossover(1.0, 30.0))

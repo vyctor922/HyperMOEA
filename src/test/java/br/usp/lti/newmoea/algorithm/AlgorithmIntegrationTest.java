@@ -48,6 +48,10 @@ import org.uma.jmetal.util.comparator.RankingAndCrowdingDistanceComparator;
  * Testes de integração dos algoritmos evolutivos multiobjetivo (MOEAs).
  * Verifica instanciação, execução reduzida, término correto, validade das soluções,
  * padronização de camadas/população do NSGA-III e validação de pesos do MOEA/DD em T05.
+ *
+ * <p><strong>Nota:</strong> Os testes abaixo que referenciam {@code MOEAD_Weights} são testes de uma
+ * tarefa específica (T05) para verificação e auditoria de validação, não devendo ser usados como
+ * referência para execuções finais (que utilizam {@code resources/weightVectorFiles}).
  */
 public class AlgorithmIntegrationTest {
 
@@ -166,6 +170,7 @@ public class AlgorithmIntegrationTest {
         MutationOperator<DoubleSolution> mutation = new PolynomialMutation(1.0 / problem.numberOfVariables(), 20.0);
         int popSize = StaticParams.getPopulationSize(2);
 
+        // Referência à pasta legada protegida apenas para verificação em teste específico da tarefa T05 (não usar em execuções finais).
         WFGStudy.validateMoeadWeightFile("MOEAD_Weights", problem, popSize);
 
         MOEADBuilder moead = new MOEADBuilder(problem, MOEADBuilder.Variant.MOEADD)
@@ -177,6 +182,7 @@ public class AlgorithmIntegrationTest {
                 .setNeighborhoodSelectionProbability(0.9)
                 .setMaximumNumberOfReplacedSolutions(2)
                 .setNeighborSize(20)
+                // Diretório legado protegido usado apenas neste teste de verificação (T05), não nas execuções finais.
                 .setDataDirectory("MOEAD_Weights")
                 .setFunctionType(AbstractMOEAD.FunctionType.PBI);
 
@@ -196,6 +202,7 @@ public class AlgorithmIntegrationTest {
         CrossoverOperator<DoubleSolution> crossover = new SBXCrossover(1.0, 30.0);
         MutationOperator<DoubleSolution> mutation = new PolynomialMutation(1.0 / problem.numberOfVariables(), 20.0);
 
+        // Uso exclusivo de pasta legada protegida em teste de verificação da tarefa T05 (não usar em execuções finais).
         double[][] weights = WFGStudy.validateMoeadWeightFile("MOEAD_Weights", problem, expectedPopSize);
         assertThat(weights).hasDimensions(expectedPopSize, m);
 
