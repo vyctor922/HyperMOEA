@@ -15,6 +15,8 @@ import org.uma.jmetal.algorithm.multiobjective.agemoea.AGEMOEABuilder;
 import org.uma.jmetal.algorithm.multiobjective.agemoeaii.AGEMOEAIIBuilder;
 import org.uma.jmetal.algorithm.multiobjective.moead.AbstractMOEAD;
 import org.uma.jmetal.algorithm.multiobjective.moead.MOEADBuilder;
+import org.uma.jmetal.algorithm.multiobjective.moead.MOEADD;
+import org.uma.jmetal.algorithm.multiobjective.moead.util.MOEADUtils;
 import org.uma.jmetal.algorithm.multiobjective.nsgaiii.NSGAIIIBuilder;
 import org.uma.jmetal.component.algorithm.multiobjective.RVEABuilder;
 import org.uma.jmetal.component.catalogue.common.evaluation.Evaluation;
@@ -28,12 +30,13 @@ import org.uma.jmetal.solution.doublesolution.DoubleSolution;
 import org.uma.jmetal.util.bounds.Bounds;
 import org.uma.jmetal.util.comparator.RankingAndCrowdingDistanceComparator;
 import org.uma.jmetal.util.evaluator.SolutionListEvaluator;
+import org.uma.jmetal.util.point.impl.IdealPoint;
+import org.uma.jmetal.util.point.impl.NadirPoint;
 import org.uma.jmetal.util.referencepoint.ReferencePointGenerator;
 
 /**
  * Wrapper thread-safe sobre {@link DoubleProblem} para auditoria e imposição de
- * contrato de
- * orçamento real de avaliações ({@link Problem#evaluate(Object)}) na Fase 3
+ * contrato de orçamento real de avaliações ({@link Problem#evaluate(Object)})
  * (T13).
  *
  * <p>
@@ -85,13 +88,28 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     private final long maxBudget;
     private final boolean enforceHardBudget;
 
+    private final AtomicLong reservedEvaluations = new AtomicLong(0L);
     private final AtomicLong attemptedEvaluations = new AtomicLong(0L);
     private final AtomicLong actualProblemEvaluations = new AtomicLong(0L);
     private final AtomicLong suppressedOvershootEvaluations = new AtomicLong(0L);
     private final AtomicInteger evaluatorBatchCalls = new AtomicInteger(0);
-    private final AtomicReference<double[]> lastValidObjectives = new AtomicReference<>(null);
     private final AtomicReference<List<DoubleSolution>> lastValidBatchSnapshot = new AtomicReference<>(
             Collections.emptyList());
+    private volatile java.util.function.IntConsumer preBatchEvaluationListener;
+
+    /**
+     * Registra um ouvinte passivo invocado no início de cada chamada de lote em
+     * {@link BudgetContractEvaluator#evaluate} (recebendo o índice 1-based do
+     * lote), utilizado
+     * exclusivamente quando {@code -Dstudy.enableR2Observer=true} estiver
+     * habilitado (opt-in) para
+     * coletar a curva geracional de {@code R2} sobre a população sobrevivente sem
+     * adicionar
+     * avaliações de objetivos.
+     */
+    public void setPreBatchEvaluationListener(java.util.function.IntConsumer listener) {
+        this.preBatchEvaluationListener = listener;
+    }
 
     /**
      * Cria um wrapper em modo auditoria ({@code enforceHardBudget = false}) com
@@ -128,49 +146,89 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
+     * Reserva atomicamente uma vaga no orçamento de avaliações antes de invocar o
+     * problema
+     * subjacente, garantindo segurança de threads mesmo sob avaliação paralela.
+     *
+     * @return {@code true} se a avaliação está autorizada dentro de
+     *         {@code maxBudget};
+     *         {@code false} se {@code enforceHardBudget == true} e
+     *         {@code maxBudget} já foi atingido
+     */
+    private boolean tryReserveBudgetSlot() {
+        while (true) {
+            long current = reservedEvaluations.get();
+            if (enforceHardBudget && current >= maxBudget) {
+                return false;
+            }
+            if (reservedEvaluations.compareAndSet(current, current + 1L)) {
+                return true;
+            }
+        }
+    }
+
+    /**
+     * Tenta avaliar uma solução de lote dentro do saldo restante do orçamento.
+     *
+     * <p>
+     * Se não houver saldo suficiente sob {@code enforceHardBudget == true}, não
+     * invoca o
+     * problema subjacente nem preenche objetivos fictícios/herdados, retornando
+     * {@code false}
+     * para que o avaliador descarte o candidato antes da seleção de sobreviventes.
+     */
+    private boolean tryEvaluateCandidateWithinBudget(DoubleSolution solution) {
+        Objects.requireNonNull(solution, "A solução a avaliar não pode ser nula.");
+        if (!tryReserveBudgetSlot()) {
+            attemptedEvaluations.incrementAndGet();
+            suppressedOvershootEvaluations.incrementAndGet();
+            return false;
+        }
+        long attemptIndex = attemptedEvaluations.incrementAndGet();
+        delegate.evaluate(solution);
+        actualProblemEvaluations.incrementAndGet();
+        if (!enforceHardBudget && attemptIndex > maxBudget) {
+            suppressedOvershootEvaluations.incrementAndGet();
+        }
+        return true;
+    }
+
+    /**
      * Avalia uma solução contabilizando atomicamente a chamada.
      *
+     * <p>
+     * Conforme decisão de governança (T33 / A2), são estritamente proibidos
+     * objetivos fictícios ou herdados/copiados de outros candidatos: quando
+     * {@code enforceHardBudget == true}, o controle de lote parcial deve ocorrer no
+     * fluxo de
+     * reprodução/avaliação do algoritmo; qualquer invocação direta a
+     * {@code evaluate(solution)}
+     * após o esgotamento de {@code maxBudget} lança {@link IllegalStateException}.
+     *
      * @param solution solução a avaliar
-     * @return a própria solução avaliada (ou preenchida com objetivos finitos de
-     *         fallback caso
-     *         {@code enforceHardBudget == true} e o orçamento já esteja esgotado)
+     * @return a própria solução avaliada pelo problema subjacente
+     * @throws IllegalStateException se {@code enforceHardBudget == true} e
+     *                               {@code maxBudget} já estiver esgotado
      */
     @Override
     public DoubleSolution evaluate(DoubleSolution solution) {
         Objects.requireNonNull(solution, "A solução a avaliar não pode ser nula.");
+        if (!tryReserveBudgetSlot()) {
+            attemptedEvaluations.incrementAndGet();
+            suppressedOvershootEvaluations.incrementAndGet();
+            throw new IllegalStateException(
+                    "Violação do contrato estrito de orçamento: Problem.evaluate invocado após esgotamento de maxBudget="
+                            + maxBudget
+                            + " no problema "
+                            + delegate.name());
+        }
         long attemptIndex = attemptedEvaluations.incrementAndGet();
-
-        if (!enforceHardBudget || attemptIndex <= maxBudget) {
-            DoubleSolution evaluated = delegate.evaluate(solution);
-            actualProblemEvaluations.incrementAndGet();
-            if (attemptIndex <= maxBudget) {
-                double[] objs = evaluated.objectives();
-                if (objs != null) {
-                    lastValidObjectives.set(objs.clone());
-                }
-            } else {
-                suppressedOvershootEvaluations.incrementAndGet();
-            }
-            return evaluated;
+        DoubleSolution evaluated = delegate.evaluate(solution);
+        actualProblemEvaluations.incrementAndGet();
+        if (!enforceHardBudget && attemptIndex > maxBudget) {
+            suppressedOvershootEvaluations.incrementAndGet();
         }
-
-        // Hard-stop ativo e tentativa excede maxBudget: não invoca
-        // delegate.evaluate(solution)
-        suppressedOvershootEvaluations.incrementAndGet();
-        double[] fallback = lastValidObjectives.get();
-        double[] targetObjectives = solution.objectives();
-        if (targetObjectives != null) {
-            if (fallback != null && fallback.length == targetObjectives.length) {
-                System.arraycopy(fallback, 0, targetObjectives, 0, targetObjectives.length);
-            } else {
-                for (int i = 0; i < targetObjectives.length; i++) {
-                    if (!Double.isFinite(targetObjectives[i])) {
-                        targetObjectives[i] = 0.0;
-                    }
-                }
-            }
-        }
-        return solution;
+        return evaluated;
     }
 
     /**
@@ -178,11 +236,11 @@ public class EvaluationBudgetProblem implements DoubleProblem {
      * controlados.
      */
     public void resetCounters() {
+        reservedEvaluations.set(0L);
         attemptedEvaluations.set(0L);
         actualProblemEvaluations.set(0L);
         suppressedOvershootEvaluations.set(0L);
         evaluatorBatchCalls.set(0);
-        lastValidObjectives.set(null);
         lastValidBatchSnapshot.set(Collections.emptyList());
     }
 
@@ -342,7 +400,11 @@ public class EvaluationBudgetProblem implements DoubleProblem {
         public List<DoubleSolution> evaluate(
                 List<DoubleSolution> solutionList, Problem<DoubleSolution> problem) {
             Objects.requireNonNull(solutionList, "A lista de soluções não pode ser nula.");
-            evaluatorBatchCalls.incrementAndGet();
+            int batchNo = evaluatorBatchCalls.incrementAndGet();
+            java.util.function.IntConsumer preHook = preBatchEvaluationListener;
+            if (preHook != null) {
+                preHook.accept(batchNo);
+            }
 
             if (!enforceHardBudget) {
                 for (DoubleSolution solution : solutionList) {
@@ -354,20 +416,15 @@ public class EvaluationBudgetProblem implements DoubleProblem {
 
             List<DoubleSolution> evaluatedWithinBudget = new ArrayList<>(solutionList.size());
             for (DoubleSolution solution : solutionList) {
-                if (getRemainingBudget() <= 0L) {
-                    // Registra tentativa excedente sem avaliar no problema real e descarta do lote
-                    attemptedEvaluations.incrementAndGet();
-                    suppressedOvershootEvaluations.incrementAndGet();
-                } else {
-                    EvaluationBudgetProblem.this.evaluate(solution);
+                if (tryEvaluateCandidateWithinBudget(solution)) {
                     evaluatedWithinBudget.add(solution);
                 }
             }
             if (!evaluatedWithinBudget.isEmpty()) {
                 recordValidSnapshot(evaluatedWithinBudget);
-                solutionList.clear();
-                solutionList.addAll(evaluatedWithinBudget);
             }
+            solutionList.clear();
+            solutionList.addAll(evaluatedWithinBudget);
             return solutionList;
         }
 
@@ -402,20 +459,16 @@ public class EvaluationBudgetProblem implements DoubleProblem {
 
             List<DoubleSolution> evaluatedWithinBudget = new ArrayList<>(solutionList.size());
             for (DoubleSolution solution : solutionList) {
-                if (getRemainingBudget() <= 0L) {
-                    attemptedEvaluations.incrementAndGet();
-                    suppressedOvershootEvaluations.incrementAndGet();
-                } else {
-                    EvaluationBudgetProblem.this.evaluate(solution);
+                if (tryEvaluateCandidateWithinBudget(solution)) {
                     evaluatedWithinBudget.add(solution);
                 }
             }
             computedEvaluations = evaluatedWithinBudget.size();
             if (!evaluatedWithinBudget.isEmpty()) {
                 recordValidSnapshot(evaluatedWithinBudget);
-                solutionList.clear();
-                solutionList.addAll(evaluatedWithinBudget);
             }
+            solutionList.clear();
+            solutionList.addAll(evaluatedWithinBudget);
             return solutionList;
         }
 
@@ -669,25 +722,188 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Constrói uma instância de qualquer um dos 6 algoritmos principais reproduzindo fielmente a
-     * configuração atual de {@link WFGStudy} (Modo Auditoria) ou aplicando o contrato estrito de
-     * orçamento \(B_{\text{target}}\) (Modo Contrato Estrito).
+     * Valida explicitamente que o orçamento alvo \(B\) comporta a inicialização
+     * completa da
+     * população interna \(N_{\text{alloc}}(\text{alg}, m)\) exigida pelo algoritmo
+     * (T33 / A2).
      *
-     * @param algorithmName nome do algoritmo ({@code "NSGA-III"}, {@code "MOEA/DD"}, {@code "FDEA"},
-     *     {@code "RVEA"}, {@code "AGE-MOEA"}, {@code "AGE-MOEA-II"})
-     * @param budgetProblem instância de {@link EvaluationBudgetProblem} envolvendo o problema real
-     * @param requestedGenerations número de gerações desejado (ex.: {@code StaticParams.getMaxGenerations})
-     * @param crossover operador de cruzamento
-     * @param mutation operador de mutação
-     * @return instância configurada de {@link Algorithm}
+     * @param algorithmName identificador do algoritmo
+     * @param m             número de objetivos
+     * @param targetBudget  orçamento máximo de avaliações \(B\)
+     * @throws IllegalArgumentException se \(B < N_{\text{alloc}}(\text{alg}, m)\)
      */
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static void validateMinimumInitializationBudget(
+            String algorithmName, int m, long targetBudget) {
+        String canonical = normalizeAlgorithmName(algorithmName);
+        int nAlloc = getAllocatedPopulationSize(canonical, m);
+        if (targetBudget < nAlloc) {
+            throw new IllegalArgumentException(
+                    String.format(
+                            "Orçamento B=%d insuficiente para inicialização válida de %s em m=%d (exige pelo menos N_alloc=%d avaliações).",
+                            targetBudget, canonical, m, nAlloc));
+        }
+    }
+
+    /**
+     * Adaptador steady-state do {@link MOEADD} (T33 / A2) que
+     * preserva integralmente as estruturas internas de arquivo, ranking,
+     * sub-regiões, pontos ideal
+     * e nadir do {@code MOEADD} no jMetal 7.8, substituindo apenas o laço
+     * {@code do-while}
+     * pós-verificado em lote por verificação prévia e passo a passo
+     * {@code evaluations < maxEvaluations}.
+     *
+     * <p>
+     * Garante que:
+     * <ul>
+     * <li>Para \(B = N_{\text{alloc}}\), o algoritmo encerra imediatamente após a
+     * inicialização
+     * completa sem executar um segundo lote obrigatório;</li>
+     * <li>Para \(B = k N_{\text{alloc}} + r\) (\(1 \le r < N_{\text{alloc}}\)),
+     * apenas \(r\)
+     * descendentes são gerados, avaliados e integrados via {@code updateArchive} na
+     * última
+     * permutação;</li>
+     * <li>Para \(B = G N_{\text{alloc}}\) com \(G \ge 2\) (todas as configurações
+     * canônicas da
+     * campanha), a sequência de chamadas ao RNG e transições de estado é idêntica
+     * bit a bit
+     * ao {@link MOEADD} padrão do jMetal 7.8.</li>
+     * </ul>
+     */
+    public static final class BudgetCompliantMOEADD extends MOEADD<DoubleSolution> {
+
+        private static final long serialVersionUID = 1L;
+        private java.util.function.BiConsumer<Long, List<DoubleSolution>> epochPopulationListener;
+
+        public void setEpochPopulationListener(
+                java.util.function.BiConsumer<Long, List<DoubleSolution>> listener) {
+            this.epochPopulationListener = listener;
+        }
+
+        public BudgetCompliantMOEADD(
+                Problem<DoubleSolution> problem,
+                int populationSize,
+                int resultPopulationSize,
+                int maxEvaluations,
+                CrossoverOperator<DoubleSolution> crossover,
+                MutationOperator<DoubleSolution> mutation,
+                AbstractMOEAD.FunctionType functionType,
+                String dataDirectory,
+                double neighborhoodSelectionProbability,
+                int maximumNumberOfReplacedSolutions,
+                int neighborSize) {
+            super(
+                    problem,
+                    populationSize,
+                    resultPopulationSize,
+                    maxEvaluations,
+                    crossover,
+                    mutation,
+                    functionType,
+                    dataDirectory,
+                    neighborhoodSelectionProbability,
+                    maximumNumberOfReplacedSolutions,
+                    neighborSize);
+        }
+
+        @Override
+        public void run() {
+            evaluations = 0;
+            population = new ArrayList<>(populationSize);
+            neighborhood = new int[populationSize][neighborSize];
+            lambda = new double[populationSize][problem.numberOfObjectives()];
+            idealPoint = new IdealPoint(problem.numberOfObjectives());
+            nadirPoint = new NadirPoint(problem.numberOfObjectives());
+            rankIdx = new int[populationSize][populationSize];
+            subregionIdx = new int[populationSize][populationSize];
+            subregionDist = new double[populationSize][populationSize];
+
+            initializeUniformWeight();
+            initializeNeighborhood();
+            initPopulation();
+
+            idealPoint.update(population);
+            nadirPoint.update(population);
+
+            for (int i = 0; i < populationSize; i++) {
+                double distance = calculateDistance2(
+                        population.get(i),
+                        lambda[i],
+                        idealPoint.values(),
+                        nadirPoint.values());
+                subregionDist[i][i] = distance;
+            }
+
+            ranking = computeRanking(population);
+            for (int curRank = 0; curRank < ranking.getNumberOfSubFronts(); curRank++) {
+                List<DoubleSolution> front = ranking.getSubFront(curRank);
+                for (DoubleSolution s : front) {
+                    int position = population.indexOf(s);
+                    rankIdx[curRank][position] = 1;
+                }
+            }
+            if (epochPopulationListener != null) {
+                epochPopulationListener.accept((long) evaluations, population);
+            }
+
+            while (evaluations < maxEvaluations) {
+                int[] permutation = new int[populationSize];
+                MOEADUtils.randomPermutation(permutation, populationSize);
+                for (int i = 0; i < populationSize && evaluations < maxEvaluations; i++) {
+                    int cid = permutation[i];
+                    int type = (randomGenerator.nextDouble() < neighborhoodSelectionProbability)
+                            ? 1
+                            : 2;
+                    List<DoubleSolution> parents = matingSelection(cid, type);
+                    List<DoubleSolution> children = crossoverOperator.execute(parents);
+                    DoubleSolution child = children.get(0);
+                    mutationOperator.execute(child);
+                    problem.evaluate(child);
+                    evaluations++;
+                    idealPoint.update(child.objectives());
+                    nadirPoint.update(child.objectives());
+                    updateArchive(child);
+                }
+                if (epochPopulationListener != null) {
+                    epochPopulationListener.accept((long) evaluations, population);
+                }
+            }
+        }
+    }
+
+    /**
+     * Constrói uma instância de qualquer um dos 6 algoritmos principais
+     * reproduzindo fielmente a
+     * configuração atual de {@link WFGStudy} (Modo Auditoria) ou aplicando o
+     * contrato estrito de
+     * orçamento \(B_{\text{target}}\) (Modo Contrato Estrito).
+     */
     public static Algorithm<List<DoubleSolution>> buildAuditedAlgorithm(
             String algorithmName,
             EvaluationBudgetProblem budgetProblem,
             int requestedGenerations,
             CrossoverOperator<DoubleSolution> crossover,
             MutationOperator<DoubleSolution> mutation) {
+        return buildAuditedAlgorithm(
+                algorithmName, budgetProblem, requestedGenerations, crossover, mutation, null);
+    }
+
+    /**
+     * Sobrecarga de {@link #buildAuditedAlgorithm} que aceita diretório de pesos do
+     * {@code MOEA/DD}
+     * previamente resolvido no preflight/contexto do estudo, evitando re-resolução
+     * repetida de
+     * artefatos durante a execução dos jobs (T33 / T34).
+     */
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    public static Algorithm<List<DoubleSolution>> buildAuditedAlgorithm(
+            String algorithmName,
+            EvaluationBudgetProblem budgetProblem,
+            int requestedGenerations,
+            CrossoverOperator<DoubleSolution> crossover,
+            MutationOperator<DoubleSolution> mutation,
+            String preResolvedMoeadWeightsDir) {
         Objects.requireNonNull(budgetProblem, "budgetProblem não pode ser nulo.");
         Objects.requireNonNull(crossover, "crossover não pode ser nulo.");
         Objects.requireNonNull(mutation, "mutation não pode ser nulo.");
@@ -697,27 +913,28 @@ public class EvaluationBudgetProblem implements DoubleProblem {
         int nConfig = getConfiguredPopulationSize(m);
         int targetBudget = Math.toIntExact(budgetProblem.getMaxBudget());
         boolean strict = budgetProblem.isEnforceHardBudget();
+        if (strict) {
+            validateMinimumInitializationBudget(canonical, m, targetBudget);
+        }
 
         return switch (canonical) {
             case "NSGA-III" -> {
                 int outerDivisions = StaticParams.getOuterDivisions(m);
                 int innerDivisions = StaticParams.getInnerDivisions(m);
                 int nAlloc = getAllocatedPopulationSize("NSGA-III", m);
-                int iterations =
-                        strict
-                                ? computeExactGenerationsForBudget(targetBudget, nAlloc)
-                                : Math.max(1, requestedGenerations);
+                int iterations = strict
+                        ? computeExactGenerationsForBudget(targetBudget, nAlloc)
+                        : Math.max(1, requestedGenerations);
 
-                SelectionOperator selection =
-                        new BinaryTournamentSelection<>(new RankingAndCrowdingDistanceComparator<>());
-                NSGAIIIBuilder<DoubleSolution> builder =
-                        new NSGAIIIBuilder<>(budgetProblem)
-                                .setCrossoverOperator(crossover)
-                                .setMutationOperator(mutation)
-                                .setSelectionOperator(selection)
-                                .setMaxIterations(iterations)
-                                .setNumberOfDivisions(outerDivisions)
-                                .setSolutionListEvaluator(budgetProblem.createSolutionListEvaluator());
+                SelectionOperator selection = new BinaryTournamentSelection<>(
+                        new RankingAndCrowdingDistanceComparator<>());
+                NSGAIIIBuilder<DoubleSolution> builder = new NSGAIIIBuilder<>(budgetProblem)
+                        .setCrossoverOperator(crossover)
+                        .setMutationOperator(mutation)
+                        .setSelectionOperator(selection)
+                        .setMaxIterations(iterations)
+                        .setNumberOfDivisions(outerDivisions)
+                        .setSolutionListEvaluator(budgetProblem.createSolutionListEvaluator());
                 if (innerDivisions > 0) {
                     builder.setSecondLayerDivisions(innerDivisions);
                 }
@@ -725,10 +942,9 @@ public class EvaluationBudgetProblem implements DoubleProblem {
             }
             case "AGE-MOEA" -> {
                 int nAlloc = getAllocatedPopulationSize("AGE-MOEA", m);
-                int iterations =
-                        strict
-                                ? computeExactGenerationsForBudget(targetBudget, nAlloc)
-                                : Math.max(1, requestedGenerations);
+                int iterations = strict
+                        ? computeExactGenerationsForBudget(targetBudget, nAlloc)
+                        : Math.max(1, requestedGenerations);
                 AGEMOEABuilder<DoubleSolution> builder = new AGEMOEABuilder<>(budgetProblem);
                 builder.setMaxIterations(iterations);
                 builder.setCrossoverOperator(crossover);
@@ -739,10 +955,9 @@ public class EvaluationBudgetProblem implements DoubleProblem {
             }
             case "AGE-MOEA-II" -> {
                 int nAlloc = getAllocatedPopulationSize("AGE-MOEA-II", m);
-                int iterations =
-                        strict
-                                ? computeExactGenerationsForBudget(targetBudget, nAlloc)
-                                : Math.max(1, requestedGenerations);
+                int iterations = strict
+                        ? computeExactGenerationsForBudget(targetBudget, nAlloc)
+                        : Math.max(1, requestedGenerations);
                 AGEMOEAIIBuilder<DoubleSolution> builder = new AGEMOEAIIBuilder<>(budgetProblem);
                 builder.setMaxIterations(iterations);
                 builder.setCrossoverOperator(crossover);
@@ -752,30 +967,47 @@ public class EvaluationBudgetProblem implements DoubleProblem {
                 yield builder.build();
             }
             case "MOEA/DD" -> {
-                String effectiveDataDir = WFGStudy.resolveMoeadDataDirectory(
-                        WFGStudy.getWeightsDirectory(), budgetProblem.numberOfObjectives(), nConfig, "MOEADD");
-                WFGStudy.validateMoeadWeightFile(effectiveDataDir, budgetProblem, nConfig, "MOEADD");
-                MOEADBuilder builder =
-                        new MOEADBuilder(budgetProblem, MOEADBuilder.Variant.MOEADD)
-                                .setCrossover(crossover)
-                                .setMutation(mutation)
-                                .setMaxEvaluations(targetBudget)
-                                .setPopulationSize(nConfig)
-                                .setResultPopulationSize(nConfig)
-                                .setNeighborhoodSelectionProbability(0.9)
-                                .setMaximumNumberOfReplacedSolutions(2)
-                                .setNeighborSize(20)
-                                .setDataDirectory(effectiveDataDir)
-                                .setFunctionType(AbstractMOEAD.FunctionType.PBI);
+                String effectiveDataDir;
+                if (preResolvedMoeadWeightsDir != null && !preResolvedMoeadWeightsDir.isBlank()) {
+                    effectiveDataDir = preResolvedMoeadWeightsDir;
+                } else {
+                    effectiveDataDir = WFGStudy.resolveMoeadDataDirectory(
+                            WFGStudy.getWeightsDirectory(), budgetProblem.numberOfObjectives(), nConfig, "MOEADD");
+                    WFGStudy.validateMoeadWeightFile(effectiveDataDir, budgetProblem, nConfig, "MOEADD");
+                }
+                if (strict) {
+                    yield new BudgetCompliantMOEADD(
+                            budgetProblem,
+                            nConfig,
+                            nConfig,
+                            targetBudget,
+                            crossover,
+                            mutation,
+                            AbstractMOEAD.FunctionType.PBI,
+                            effectiveDataDir,
+                            0.9,
+                            2,
+                            20);
+                }
+                MOEADBuilder builder = new MOEADBuilder(budgetProblem, MOEADBuilder.Variant.MOEADD)
+                        .setCrossover(crossover)
+                        .setMutation(mutation)
+                        .setMaxEvaluations(targetBudget)
+                        .setPopulationSize(nConfig)
+                        .setResultPopulationSize(nConfig)
+                        .setNeighborhoodSelectionProbability(0.9)
+                        .setMaximumNumberOfReplacedSolutions(2)
+                        .setNeighborSize(20)
+                        .setDataDirectory(effectiveDataDir)
+                        .setFunctionType(AbstractMOEAD.FunctionType.PBI);
                 yield builder.build();
             }
             case "FDEA" -> {
-                int generations =
-                        strict
-                                ? computeExactGenerationsForBudget(targetBudget, nConfig)
-                                : Math.max(1, requestedGenerations);
-                SelectionOperator selection =
-                        new BinaryTournamentSelection<>(new RankingAndCrowdingDistanceComparator<>());
+                int generations = strict
+                        ? computeExactGenerationsForBudget(targetBudget, nConfig)
+                        : Math.max(1, requestedGenerations);
+                SelectionOperator selection = new BinaryTournamentSelection<>(
+                        new RankingAndCrowdingDistanceComparator<>());
                 yield new FDEABuilder(budgetProblem)
                         .setPopulationSize(nConfig)
                         .setMaxGenerations(generations)
@@ -788,22 +1020,20 @@ public class EvaluationBudgetProblem implements DoubleProblem {
             case "RVEA" -> {
                 int outerDivisions = StaticParams.getOuterDivisions(m);
                 int innerDivisions = StaticParams.getInnerDivisions(m);
-                List<double[]> referenceVectors =
-                        (innerDivisions > 0)
-                                ? ReferencePointGenerator.generateTwoLayers(
-                                        m, outerDivisions, innerDivisions)
-                                : ReferencePointGenerator.generateSingleLayer(m, outerDivisions);
-                int rveaMaxEvals = Math.max(nConfig, targetBudget);
-                RVEABuilder<DoubleSolution> builder =
-                        new RVEABuilder<>(
-                                budgetProblem,
-                                referenceVectors.size(),
-                                rveaMaxEvals,
-                                crossover,
-                                mutation,
-                                2.0,
-                                0.1,
-                                referenceVectors);
+                List<double[]> referenceVectors = (innerDivisions > 0)
+                        ? ReferencePointGenerator.generateTwoLayers(
+                                m, outerDivisions, innerDivisions)
+                        : ReferencePointGenerator.generateSingleLayer(m, outerDivisions);
+                int rveaMaxEvals = strict ? targetBudget : Math.max(nConfig, targetBudget);
+                RVEABuilder<DoubleSolution> builder = new RVEABuilder<>(
+                        budgetProblem,
+                        referenceVectors.size(),
+                        rveaMaxEvals,
+                        crossover,
+                        mutation,
+                        2.0,
+                        0.1,
+                        referenceVectors);
                 builder.setEvaluation(budgetProblem.createComponentEvaluation());
                 yield builder.build();
             }
@@ -813,9 +1043,23 @@ public class EvaluationBudgetProblem implements DoubleProblem {
     }
 
     /**
-     * Normaliza as diferentes grafias de nomes dos 6 algoritmos principais para o
-     * identificador
-     * canônico usado nos relatórios da Fase 3.
+     * Retorna a tag de diretório/relatório usada pelos componentes {@code jMetal}
+     * ({@code algorithm.name()}) correspondente ao algoritmo informado.
+     */
+    public static String toJMetalAlgorithmTag(String algorithmName) {
+        return switch (normalizeAlgorithmName(algorithmName)) {
+            case "NSGA-III" -> "NSGAIII";
+            case "MOEA/DD" -> "MOEADD";
+            case "FDEA" -> "FDEA";
+            case "RVEA" -> "RVEA";
+            case "AGE-MOEA" -> "AGE-MOEA";
+            case "AGE-MOEA-II" -> "AGE-MOEA-II";
+            default -> throw new IllegalArgumentException("Algoritmo não suportado: " + algorithmName);
+        };
+    }
+
+    /**
+     * Normaliza as diferentes grafias de nomes dos 6 algoritmos principais.
      */
     public static String normalizeAlgorithmName(String algorithmName) {
         if (algorithmName == null || algorithmName.isBlank()) {

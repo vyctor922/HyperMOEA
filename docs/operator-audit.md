@@ -220,7 +220,7 @@ A inspeção conjunta de [`WFGStudy.java`](../src/main/java/br/usp/lti/newmoea/s
 
 ### 6.2. Métodos Auxiliares Complementares em `WFGStudy`
 
-Os métodos auxiliares `buildNSGAII`, `buildSPEA2`, `buildESPEA`, `buidGWASFGA` (todos com `SBXCrossover(1.0, 30.0)` e `PolynomialMutation(1.0 / n, 20.0)`) e `buildMOEADDRA` (com `DifferentialEvolutionCrossover()` e `PolynomialMutation(1.0 / n, 20.0)`) também foram inspecionados em `WFGStudy.configureAlgorithmList` e são compatíveis com as assinaturas do jMetal 7.8.
+Os métodos auxiliares `buildNSGAII`, `buildSPEA2`, `buildESPEA`, `buildGWASFGA` (todos com `SBXCrossover(1.0, 30.0)` e `PolynomialMutation(1.0 / n, 20.0)`) e `buildMOEADDRA` (com `DifferentialEvolutionCrossover()` e `PolynomialMutation(1.0 / n, 20.0)`) também foram inspecionados em `WFGStudy.configureAlgorithmList` e são compatíveis com as assinaturas do jMetal 7.8.
 
 ---
 

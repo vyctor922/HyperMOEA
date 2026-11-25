@@ -73,7 +73,7 @@ No repositório original (`Fuzzy-Decomposition-Based-Evolutionary-Algorithm-Repo
 
 ## 4. Auditoria dos 5 Algoritmos Legados em `WFGStudy.java` e Especificação da Flag `-Dstudy.includeLegacyAlgorithms=false`
 
-Em `WFGStudy.java` (linhas 384–426 e 552–567), existem 5 métodos de construção de algoritmos legados (`buildNSGAII`, `buildSPEA2`, `buildMOEADDRA`, `buidGWASFGA`, `buildESPEA`) que estão comentados no método `configureAlgorithmList` (linhas 315–319), mas permanecem acessíveis no código. A auditoria de código e bytecode (`jmetal-algorithm-7.8.jar`) revelou os seguintes defeitos técnicos nesses métodos:
+Em `WFGStudy.java` (linhas 384–426 e 552–567), existem 5 métodos de construção de algoritmos legados (`buildNSGAII`, `buildSPEA2`, `buildMOEADDRA`, `buildGWASFGA`, `buildESPEA`) que estão comentados no método `configureAlgorithmList` (linhas 315–319), mas permanecem acessíveis no código. A auditoria de código e bytecode (`jmetal-algorithm-7.8.jar`) revelou os seguintes defeitos técnicos nesses métodos:
 
 ### 4.1 `SPEA2` (`WFGStudy.buildSPEA2`, linhas 398–409)
 - **Evidência no código (`WFGStudy.java`, linhas 399–408):**
@@ -98,9 +98,9 @@ Em `WFGStudy.java` (linhas 384–426 e 552–567), existem 5 métodos de constru
   2. Em `MOEADDRA.run()` (bytecode offsets `24–223`), após avaliar a população inicial ($N$ avaliações), cada ciclo externo seleciona um lote de subproblemas via `tourSelection(10)`: inicializa a lista com os $m$ subproblemas extremos e sorteia outros até atingir $\lfloor N / 5 \rfloor$ subproblemas (`list.size() < (int)(populationSize / 5.0)`). Em seguida, avalia todos os $\lfloor N / 5 \rfloor$ subproblemas do lote **sem verificar `evaluations < maxEvaluations` dentro do laço interno**, e a cada $30$ gerações executa `utilityFunction()`.
   3. Consequentemente, o número total de avaliações avança em saltos de $\lfloor N / 5 \rfloor$ (ultrapassando `maxEvaluations` quando $(B - N)$ não é múltiplo exato de $\lfloor N / 5 \rfloor$), e para $m=2, N \le 300$, `initializeUniformWeight()` ignora o diretório `MOEAD_Weights` e gera pesos uniformes em memória com `0.0` nos extremos.
 
-### 4.3 `GWASFGA` (`WFGStudy.buidGWASFGA`, linhas 552–560)
+### 4.3 `GWASFGA` (`WFGStudy.buildGWASFGA`, linhas 552–560)
 - **Evidência no código e bytecode (`GWASFGA`, `WASFGA`, `WeightVectors`, `ASFWASFGA`):**
-  1. O método em `WFGStudy.java` possui erro de grafia no nome (`buidGWASFGA`) e passa `maxGenerations` como 3º argumento (`maxIterations`) do construtor de `GWASFGA`.
+  1. O método em `WFGStudy.java` passa `maxGenerations` como 3º argumento (`maxIterations`) do construtor de `GWASFGA`.
   2. `GWASFGA` estende `WASFGA`. No construtor de `WASFGA` (bytecode offset `44: invokevirtual createUtilityFunction`), os vetores de pesos são lidos do arquivo via `VectorFileUtils.readVectors(weightVectorsFileName)` e invertidos por `WeightVectors.invert(weights, true)` (bytecode offset `90`).
   3. Em `WeightVectors.invert(double[][] weights, boolean normalize)` (bytecode offsets `40–48` e `74–85`), cada componente $w_{i,j}$ é invertida literalmente via `1.0 / weights[i][j]` (`dconst_1`, `daload`, `ddiv`) e depois dividida pela soma `sum = sum + (1.0 / weights[i][j])`:
      - Quando `GWASFGA` lê arquivos de pesos contendo `0.0` nos extremos (como `W3D_91.dat`, `W8D_156.dat`, `W10D_275.dat`), `1.0 / 0.0` resulta em `Double.POSITIVE_INFINITY`, `sum` torna-se `Infinity`, e `Infinity / Infinity` resulta em **`Double.NaN`** para os componentes nulos e **`0.0`** para os componentes positivos (`(1.0 / w) / Infinity = 0.0`)!

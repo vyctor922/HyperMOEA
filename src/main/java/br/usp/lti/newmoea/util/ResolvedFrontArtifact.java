@@ -3,8 +3,10 @@ package br.usp.lti.newmoea.util;
 import java.nio.file.Path;
 
 /**
- * Representação imutável e estruturada de uma frente de Pareto de referência resolvida
- * canonicamente pelo sistema.
+ * Representação imutável e estruturada de uma frente de Pareto de referência
+ * resolvida canonicamente pelo sistema, permitindo que os dados sejam
+ * compartilhados entre várias threads sem risco de uma thread alterar os dados
+ * que outra está lendo
  */
 public record ResolvedFrontArtifact(
         String problemName,
@@ -34,4 +36,3 @@ public record ResolvedFrontArtifact(
         }
     }
 }
-

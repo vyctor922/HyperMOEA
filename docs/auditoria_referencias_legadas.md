@@ -52,7 +52,7 @@ Para cada referência identificada, este documento detalha:
    ```
    - **Natureza:** Constante pública de retrocompatibilidade de API.
    - **Por que ainda se mantém:** A constante foi mantida para preservar a assinatura pública da classe e evitar que scripts utilitários externos ou análises ad-hoc do pesquisador sofram quebra de compilação caso acessem o identificador legado.
-   - **Interfere na execução final?** **NÃO.** O método `main()` de `WFGStudy`, o preflight (`runPreflightValidation`) e os builders do MOEA/DD (`buildMOEADD`, `buildMOEADDRA`, `buidGWASFGA`) utilizam exclusivamente o método dinâmico `getWeightsDirectory()`, cujo padrão é `"resources/weightVectorFiles"`, combinado com o resolvedor canônico `resolveMoeadDataDirectory(...)`. A constante `DEFAULT_LEGACY_WEIGHTS_DIRECTORY` não é invocada em nenhum momento no ciclo de vida de execução do estudo.
+   - **Interfere na execução final?** **NÃO.** O método `main()` de `WFGStudy`, o preflight (`runPreflightValidation`) e os builders do MOEA/DD (`buildMOEADD`, `buildMOEADDRA`, `buildGWASFGA`) utilizam exclusivamente o método dinâmico `getWeightsDirectory()`, cujo padrão é `"resources/weightVectorFiles"`, combinado com o resolvedor canônico `resolveMoeadDataDirectory(...)`. A constante `DEFAULT_LEGACY_WEIGHTS_DIRECTORY` não é invocada em nenhum momento no ciclo de vida de execução do estudo.
 
 2. **Linha 163:**
    ```java

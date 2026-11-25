@@ -11,6 +11,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
@@ -21,6 +22,7 @@ import org.uma.jmetal.qualityindicator.impl.InvertedGenerationalDistancePlus;
 import org.uma.jmetal.qualityindicator.impl.NormalizedHypervolume;
 import org.uma.jmetal.qualityindicator.impl.R2;
 import org.uma.jmetal.qualityindicator.impl.hypervolume.impl.PISAHypervolume;
+import org.uma.jmetal.solution.AbstractSolution;
 import org.uma.jmetal.solution.doublesolution.DoubleSolution;
 import org.uma.jmetal.util.ConstraintHandling;
 import org.uma.jmetal.util.VectorUtils;
@@ -812,7 +814,8 @@ public final class ResultFrontContract {
 
         if (rowCountMatches && dimensionsMatchProblem && allValuesFinite) {
             for (int i = 0; i < funRows; i++) {
-                DoubleSolution sol = problem.createSolution();
+                // Evita problem.createSolution() para não consumir nem disputar JMetalRandom fora de lock
+                DoubleSolution sol = createUnseededSolution(problem);
                 for (int j = 0; j < varDim; j++) {
                     sol.variables().set(j, varMatrix[i][j]);
                 }
@@ -1242,5 +1245,59 @@ public final class ResultFrontContract {
             }
         }
         return Integer.compare(a.length, b.length);
+    }
+
+    /**
+     * Instancia uma {@link DoubleSolution} compatível com {@code problem} sem invocar
+     * {@code JMetalRandom}, garantindo segurança estrita em reconstrução/auditoria concorrente.
+     */
+    public static DoubleSolution createUnseededSolution(Problem<DoubleSolution> problem) {
+        Objects.requireNonNull(problem, "problem não pode ser nulo.");
+        if (problem instanceof DoubleProblem dp) {
+            return new UnseededDoubleSolution(
+                    dp.variableBounds(),
+                    dp.numberOfObjectives(),
+                    dp.numberOfConstraints());
+        }
+        return problem.createSolution();
+    }
+
+    private static final class UnseededDoubleSolution extends AbstractSolution<Double>
+            implements DoubleSolution {
+
+        private static final long serialVersionUID = 1L;
+        private final List<Bounds<Double>> bounds;
+
+        private UnseededDoubleSolution(
+                List<Bounds<Double>> boundsList,
+                int numberOfObjectives,
+                int numberOfConstraints) {
+            super(boundsList.size(), numberOfObjectives, numberOfConstraints);
+            this.bounds = boundsList;
+        }
+
+        private UnseededDoubleSolution(UnseededDoubleSolution other) {
+            super(
+                    other.variables().size(),
+                    other.objectives().length,
+                    other.constraints().length);
+            for (int i = 0; i < other.variables().size(); i++) {
+                variables().set(i, other.variables().get(i));
+            }
+            System.arraycopy(other.objectives(), 0, objectives(), 0, other.objectives().length);
+            System.arraycopy(other.constraints(), 0, constraints(), 0, other.constraints().length);
+            this.bounds = other.bounds;
+            this.attributes = new HashMap<>(other.attributes);
+        }
+
+        @Override
+        public Bounds<Double> getBounds(int index) {
+            return bounds.get(index);
+        }
+
+        @Override
+        public DoubleSolution copy() {
+            return new UnseededDoubleSolution(this);
+        }
     }
 }

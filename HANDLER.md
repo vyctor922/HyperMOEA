@@ -406,3 +406,113 @@ A fase somente será validada quando:
 - Os documentos arquiteturais e o contexto compartilhado estiverem atualizados.
 
 Não iniciar automaticamente a campanha experimental completa.
+
+## Fase 5 — Integração pré-campanha e tratamento da auditoria de 17/11/2026
+
+### Objetivo
+
+Integrar e validar no pipeline experimental os componentes produzidos nas fases anteriores, tratando os achados da auditoria posterior sem reconstruir a arquitetura, repetir atividades concluídas sem justificativa ou alterar resultados históricos. O planejamento dos agentes esta no `TASK_COORDINATOR.md`.
+
+### Contexto e relação com as fases anteriores
+
+- T25–T31 permanecem com seus registros históricos de conclusão na Fase 4.
+- O relatório de auditoria de 17/11/2026 relata falhas e lacunas posteriores que precisam ser reproduzidas e delimitadas.
+- A divergência entre relatório, coordenador e histórico não autoriza apagar ou reescrever registros anteriores.
+- Os identificadores T32/T33 são mencionados pelo relatório; sua correspondência com arquivos reais será conferida antes da distribuição.
+- As propostas T32–T36 somente serão materializadas após verificar numeração, equivalências e padrão das tarefas reais.
+
+### Estado
+
+**Fase 5 integralmente concluída, validada e homologada (`T32`–`T37` em estado `completed_validated`, 18/11/2026).** Suíte integral sem exclusões aprovada via `mvn clean test` (**`394` testes executados em `27` classes, `0` falhas, `0` erros, `0` ignorados**), empacotamento `mvn package -DskipTests` aprovado, smokes reais via CLI (`mvn exec:java`) validados em `WFGStudy/tests/` (lotes sequenciais preservados em `WFG4` $m=2$ com `-Dstudy.processIsolation=true` e `WFG4` $m=15$ sob deadline de 15s), paridade estatística ao vivo confirmada contra `R version 4.6.2 (2026-10-29 ucrt)` em R base nativo (`R_CROSS_VALIDATION_PASSED`), `README.md` consolidado e `0` alterações nos diretórios protegidos (`MOEAD_Weights/`, `pareto_fronts/`, `pareto_fronts/csv/`, `pareto/` e dados históricos de `WFGStudy/`). Campanha experimental completa mantida estritamente desativada, aguardando autorização explícita do operador humano.
+
+### Matriz de execução e estado da Fase 5
+
+| ID | Descrição | Dependências | Estado | Responsável | Arquivos afetados / Evidências |
+|---|---|---|---|---|---|
+| T32 | Reconciliação, baseline e correções mínimas de configuração/saída | Nenhuma nova | `completed_validated` | `agentA` (validado pelo Coordenador) | `WFGStudy.java` (`StudyOutputLayout` / `resolveStudyOutputLayout`), `MoeaddWeightValidationTest.java`, `StudyOutputDirectoryAndGenerationsTest.java`; baseline `373/7` reproduzido $\to$ `mvn clean test` `376/0` aprovado |
+| T33 | Orçamento efetivo, isolamento, sementes e preservação de runs/lotes (absorve T32 do relatório) | T32; decisões `A1`, `A2` e `A5` aprovadas | `completed_validated` | `agentB` (validado pelo Coordenador) | `StaticParams.java` (`DTLZ5/6` `{1000,1000,1000,1000,1500,2000}`), `EvaluationBudgetProblem.java` (`BudgetCompliantMOEADD`, reserva atômica, proibição de objetivos fictícios, rejeição $B < N_{\text{alloc}}$), `IsolatedJobExecutor.java` (`executeJobInSubprocess`, `executeAndPersistBatch`, `CorruptedRunArtifactException`), `WFGStudy.java`, `StudyBudgetIsolationAndResumeIntegrationTest.java` (`44/44` testes de integração/regressão aprovados) |
+| T34 | Referências, overrides, memória e manifesto efetivo | T32; interface de T33 | `completed_validated` | `agentC` / Coordenador | `ParetoFrontValidator.java` (geradores analíticos `WFG1–WFG9` com geometrias distintas de Huband et al., validação de conteúdo antes de seleção nas Prioridades 1 e 2, fallback opcional `-Dstudy.restoreOfficialJMetalResources=false`, trava concorrente `FRONT_GENERATION_LOCKS` + escrita atômica), `ReferenceSetValidator.java` (fronteira `m=2, 2<=N<=300`, `resolveCanonicalWeightArtifactFromWeightsRoot`, `tryRestoreOfficialJMetalWeightFile`, trava `WEIGHT_GENERATION_LOCKS`, `exportManifestFromResolvedArtifacts` com estágios `PREFLIGHT_PLANNED` / `OBSERVED_CONSUMED` / `OBSERVED_EXECUTION_FAILED`), `ResolvedWeightArtifact.java`, `PerformanceProfiler.java`, `WFGStudy.java` (`-Dstudy.allowMoeadWeightsInMemory` default `false`, propagação hermética de overrides/`baseDir`), `CanonicalArtifactResolutionAndManifestTest.java` (suíte integral `mvn clean test` `386/386` aprovada + `11/11` testes extras aprovados; reservas liberadas) |
+| T35 | Resultado, normalização e hipervolume seguro integrados | T32; interfaces T33/T34; decisão `A3` + confirmação do delta com ressalva | `completed_validated` | `agentD` (validado pelo Coordenador) | `HypervolumeResult.java`, `ExactHypervolumeWorker.java` (paridade exata de caixa $[\mathbf{l}, \mathbf{r}]$ entre PISA, WFG e MC em 2D/15D), `ProcessIsolatedHypervolumeExecutor.java` (`computeExactOnly`, `evaluateConfiguredHypervolumes`, `-Dstudy.hvMethods`, opção ligar/desligar `-Dstudy.hvFallbackToMcOnAllExactTimeout` com disparo único para conjuntos de HVs pesados), `WFGStudy.java` (`THEORETICAL_PARETO_BOUNDS`, `NHV` suspenso no perfil ativo, `hv_audit_manifest.csv`, `hv_fallback_warnings.md`, `NA` estrito sem `0.0`), `StudyIndicatorPipelineIntegrationTest.java` (`41/41` testes aprovados; reservas liberadas) |
+| T36 | Estatística, profiling e documentação integrada | T32 para pesquisa; T33–T35 concluídas + decisão `A4` + Opção A (R base) | `completed_validated` | `agentE` (validado pelo Coordenador) | `StudyStatisticalAnalyzer.java` (KW + Dunn–Holm + $\hat{A}_{12}$ orientado por célula + Friedman por blocos entre problemas + descoberta/validação contra `Rscript 4.6.2`), `scripts/kruskal_dunn_holm.R` (modo `--fixture` + estudo real em R base nativo), `FDEA.java` / `EvaluationBudgetProblem.java` / `IsolatedJobExecutor.java` (`R2ExecutionObserver` opt-in com `0` avaliações extras nos 6 algoritmos), `PerformanceProfiler.java`, `WFGStudy.java`, `StudyStatisticalAndProfilingIntegrationTest.java` (`23/23` testes aprovados; reservas liberadas) |
+| T37 | Aceite fim-a-fim e reauditoria reconciliada (absorve T33 do relatório) | T32–T36 concluídas; mapeamento `A5` confirmado | `completed_validated` | Coordenador / Revisor | `ProcessIsolatedHypervolumeExecutor.java` + `IsolatedJobExecutor.java` (`resolveEffectiveRuntimeClassPath()` para `mvn exec:java`), `StudyIndicatorPipelineIntegrationTest.java`, `README.md`, `TASK_COORDINATOR.md`, `HANDLER.md`; reauditoria Zero-Trust reversa (`T36` $\to$ `T32` e `T32`/`T31` $\to$ `T01`), smokes CLI em `WFGStudy/tests/` (`FUN0_HASH_PRESERVED=True`, `pisa_status=SUCCESS_EXACT`, `NHV_EXISTS=False`, `R_CROSS_VALIDATION_PASSED`) e `mvn clean test` = **`394/394`** aprovados (todas as reservas liberadas) |
+
+### Evento de mudança de escopo e encaminhamento de governança (18/11/2026 — `A1` a `A5`)
+
+- **Mapeamento `T32`/`T33` confirmado (`A5`):** `T32` e `T33` permanecem como seções históricas de `docs/relatorio_auditoria-pre_execucao_final.md` (sem criar `tasks/task32.md` nem `tasks/task33.md`), com requisitos incorporados respectivamente em `T33` (preservação entre lotes, retomada íntegra, isolamento de RNG e reprodutibilidade determinística por `runId`) e `T37` (reauditoria Zero-Trust em ordem cronológica reversa pós-integrações).
+- **Orçamento e gerações (`A1`, `A2`):** `StaticParams.getMaxGenerations` adota `{1000, 1000, 1000, 1000, 1500, 2000}` para `DTLZ5`/`DTLZ6`; `T33` aplica $B_{\text{target}} = N_{\text{config}}(m) \times G_{\text{config}}(\text{problema}, m)$ com adaptação de lote parcial validada nos 6 algoritmos (sem objetivos fictícios/herdados, rejeitando $B < N_{\text{alloc}}$).
+- **Mudança de escopo na `T35` (`A3` — suspensão temporária de `NHV` no perfil ativo):**
+  - *Trabalho preservado:* `ResultFrontContract`, `ObjectiveNormalizationContract` (incluindo `deriveNormalizedHypervolumeO1`), `NormalizedHypervolume`, `ProcessIsolatedHypervolumeExecutor`, `ExactHypervolumeWorker`, `MonteCarloHypervolume`, `HypervolumeResult`, testes matemáticos existentes, documentação histórica e resultados prévios em `WFGStudy/`.
+  - *Pontos afetados:* No perfil ativo da Fase 5, `NHV` fica temporariamente suspenso (não é calculado, exportado, derivado obrigatoriamente em $O(1)$ nesta entrega nem incluído nas novas tabelas/análises deste perfil; eventual reativação registrada como decisão futura sem tarefa redundante). O perfil padrão calcula e exporta em saídas distintas tanto o `PISAHypervolume` exato isolado com deadline quanto a série secundária própria de `MonteCarloHypervolume` em todas as execuções (reutilizando MC válido em timeout do exato e exigindo fallback MC obrigatório quando apenas o exato é solicitado, sem nunca converter timeout/falha em zero nem apresentar MC como exato ou `NHV`). A normalização e o ponto de referência comum permanecem ativos sob o contrato científico da `T35`.
+  - *Condição de retomada da `T35`:* Reconciliar modo de normalização, nomes de propriedades e contagem de amostras com os contratos existentes e apresentar ao operador um resumo curto do delta (implementado, preservado, alterado e novos testes) antes de retomar a implementação de código da política de indicadores.
+- **Diretrizes para `T36` (`A4`):** Preservar e adaptar `scripts/kruskal_dunn_holm.R` (modo fixture + dados reais + comparação automática contra Java), inspecionar `WFGStudy/R/` e `WFGStudy/latex/`, manter geração Java de CSV/LaTeX resiliente à ausência de `Rscript`, separar análise por célula de análise global, consumir separadamente a série MC homogênea e a série exata com estados de disponibilidade (sem `NHV` no perfil ativo) e manter `R2ExecutionObserver` opt-in e desativado por padrão (sem criar Fase 6).
+
+T37 reutiliza a T33 quando sua existência e especificação forem confirmadas. Não cria outra auditoria equivalente nem reimplementa funcionalidades concluídas.
+
+A tarefa somente será concluída após revisão independente, suíte integral aprovada, integração demonstrada pelo entrypoint, preservação de dados, documentação consolidada e ausência de bloqueios no perfil aprovado.
+
+Não iniciar automaticamente a campanha experimental completa.
+
+- Responsáveis não atribuídos.
+- Nenhum patch funcional ou teste da nova fase iniciado nesta preparação.
+
+### Decisões e encaminhamentos iniciais
+
+1. Preservar os registros das Fases 1–4 e os diretórios protegidos.
+2. Não restaurar `ArtifactResolver` nem repetir sua exclusão por causa do roteiro histórico.
+3. Reutilizar componentes anteriores somente após conferir contratos e demonstrar sua chamada no fluxo real.
+4. Não tratar os resultados relatados de 373 testes/7 falhas ou os tempos de HV como medições reproduzidas nesta preparação.
+5. Conferir T32/T33 e encaminhar atividades equivalentes às tarefas existentes, evitando patches e auditorias duplicados.
+6. Manter os estados e o protocolo de eventos já utilizados no projeto.
+7. Submeter mudanças científicas ainda não aprovadas ao operador.
+8. Manter campanha completa e hiper-heurísticas fora desta execução.
+
+### Regras específicas de execução
+
+- Somente o coordenador edita `HANDLER.md` e `README.md`.
+- Executores registram início, bloqueio, retomada e entrega em eventos exclusivos conforme `AGENTS.md`.
+- O coordenador consolida status, evidências, testes, decisões, documentação e próxima ação.
+- Planejamento e auditoria desta fase ficam no coordenador; documentação definitiva de métodos, funções, parâmetros e integração fica no README.
+- Não criar relatório separado de planejamento nem `docs/scientific-rationale.md`.
+- Testes utilizam diretórios temporários ou `WFGStudy/tests/`.
+- Git permanece somente para leitura e checagens.
+- Não excluir testes, alterar dados ou suprimir falhas para obter aprovação.
+
+### Pendências e próxima ação
+
+Nenhuma pendência técnica bloqueante no perfil homologado da Fase 5 (`T32`–`T37` `completed_validated`). Próxima etapa condicionada exclusivamente à **autorização explícita do operador humano** para disparo da campanha experimental completa dos 6 MOEAs isolados (em execução contínua ou particionada por lotes via `-DrunStart` e `-Druns`), seguida, em fase posterior própria, da adaptação das hiper-heurísticas de seleção (`AdapHH`, `EA-ILS`, `LAST-RL`).
+
+### Critério de encerramento
+
+A fase depende da integração demonstrada pelo entrypoint real, suíte integral aprovada, preservação de resultados, referências e orçamento válidos, isolamento comprovado, HV protegido, análise coerente e documentação atualizada.
+
+O gate final deverá reutilizar a T33 se sua existência e especificação forem confirmadas. Ausência ou incompatibilidade será registrada e encaminhada ao operador.
+
+Não iniciar automaticamente a campanha experimental completa.
+
+## Fase 5.5 — Reauditoria Independente Zero-Trust Pós-Correções e Portabilidade Linux/Windows (18/11/2026)
+
+- **Relatório de Reauditoria Independente:** Consolidado em `docs/relatorio_auditoria_zerotrust_pos_fase5.md` (`T37` $\to$ `T01`, incluindo `T32` e `T33`), confirmando `394` testes aprovados em `27` classes (`0` falhas, `0` erros, `0` ignorados) e *smokes* reais via CLI em `WFG4` ($m=2$ em 2 lotes com `-Dstudy.processIsolation=true` e $m=15$ sob *deadline*).
+- **Portabilidade Linux / Windows (`.gitattributes` e `matchesExpectedSha256CrossPlatform`):**
+  - Criado `.gitattributes` fixando `eol=crlf` para os artefatos científicos auditados por SHA-256 (`.dat`, `.csv`, `.pf`) e `eol=lf` para scripts `*.R` e `*.sh`.
+  - Implementado `ReferenceSetValidator.matchesExpectedSha256CrossPlatform` (utilizado também em `MoeaddWeightValidationTest`), tornando a validação de manifesto SHA-256 imune a diferenças de fim de linha (`LF` vs. `CRLF`) entre Linux e Windows.
+  - Comandos de terminal em `README.md`, `docs/pipeline-pos_processamento.md`, `docs/relatorio_auditoria-pre_execucao_final.md` e `docs/relatorio_auditoria_zerotrust_pos_fase5.md` padronizados com blocos explícitos para **Windows `CMD` (`cmd.exe`)** e **`Linux Bash` / `Git Bash`**.
+
+---
+
+## Fase 6 — Otimização de Recursos Pré-Execução Final (Opções 1, 3 e 5a) antes das Hiper-heurísticas (20/11/2026)
+
+- **Escopo Autorizado pelo Operador Humano:** Implementação das opções **1**, **3** e **5a** descritas na Seção 4.2 de [`docs/guia-execucao-otimizacao-recursos.md`](docs/guia-execucao-otimizacao-recursos.md), mantendo a fase atual estritamente no **estágio de pré-execução final antes da integração com hiper-heurísticas** (`AdapHH`, `EA-ILS`, `LAST-RL`). As opções `2` (daemon JVM pool persistente), `4` (GPU / sub-blocos CUDA em Monte Carlo) e `5b` (cache de `preResolvedMoeadWeightsDir`) permanecem adiadas.
+- **Opção 1 — Checkpointing Incremental Job-a-Job e Compactação Imediata de Heap ([`IsolatedJobExecutor.java`](src/main/java/br/usp/lti/newmoea/util/IsolatedJobExecutor.java), [`WFGStudy.java`](src/main/java/br/usp/lti/newmoea/study/WFGStudy.java)):**
+  - `runPendingJobsIncremental` agora utiliza `ExecutorCompletionService<JobExecutionResult>`, persistindo imediatamente cada job concluído (`FUN<r>.csv`, `VAR<r>.csv`, `.raw.csv`) via `persistSingleJobResult` e substituindo as matrizes pesadas `double[][]` por `EMPTY_MATRIX` via `JobExecutionResult.compactRetainingMetadataOnly()` (retendo apenas escalares e SHA-256 para `profiling/job_execution_profile.csv`). Em `WFGStudy.main()`, `batchReport` é explicitamente liberado (`batchReport = null`) antes do cálculo de indicadores/estatística.
+  - Gravado journal incremental `run_manifest.checkpoint.csv` com *flush* por job e consolidação atômica em `run_manifest.csv` a cada `-Dstudy.checkpointInterval` (`DEFAULT_CHECKPOINT_INTERVAL = 25`) e em `finishAndFlush`.
+  - **Defesas:** reconciliação tolerante apenas a eventual **última linha truncada** em caso de queda (`reconcileCheckpointJournalIfPresent`), preservação integral das verificações físicas SHA-256/`VAR -> FUN` em `verifyExistingRunForResume`, e reconstrução determinística da ordem canônica do manifesto via `buildOrderedManifestEntries`.
+  - **Correção crítica de corrida concorrente em [`ResultFrontContract.java`](src/main/java/br/usp/lti/newmoea/util/ResultFrontContract.java):** substituído `problem.createSolution()` por `ResultFrontContract.createUnseededSolution` (`UnseededDoubleSolution`) em `reconstructSolutions`, `verifyFunVarAlignment` e `LazyIsolatedAlgorithmAdapter`, eliminando chamadas espúrias a `JMetalRandom.getInstance()` fora de `JMETAL_RANDOM_LOCK` na thread principal durante persistência paralela.
+- **Opção 3 — Paralelização Multicore de Indicadores e Escalonamento LPT ([`WFGStudy.java`](src/main/java/br/usp/lti/newmoea/study/WFGStudy.java), [`IsolatedJobExecutor.java`](src/main/java/br/usp/lti/newmoea/util/IsolatedJobExecutor.java)):**
+  - Adicionada fila determinística LPT (`orderJobSpecsLpt`, `estimateRelativeJobCost`) controlada por `-Dstudy.lptScheduling` (padrão automático `true` quando `maxWorkers > 1`), priorizando jobs pesados sem alterar sementes (`SplitMix64`).
+  - `computeContractualIndicatorsAndExport` paralelizada em `-Dstudy.indicatorWorkers` threads (`ExecutorCompletionService`, despacho *heaviest-first*, preservação estrita da ordem canônica em `QualityIndicatorSummary.csv` e `hv_audit_manifest.csv`).
+  - **Defesas:** isolamento estrito por thread (`ThreadLocal<IndicatorCalculators>` com limpeza `.remove()` em `finally`) para `InvertedGenerationalDistance`, `InvertedGenerationalDistancePlus` e **`R2`** (cujo bytecode do jMetal 7.8 muta `weightVectors` e `idealPoint`); cálculo prévio único de `hvRefUnit` por problema quando `NHV` solicitada; e semáforos `lowDimExactPermits`/`highDimExactPermits` via `-Dstudy.exactHvParallelWorkers` (cap padrão em $\min(\text{workers}, 2)$ para $m \ge 8$) contra explosão de RAM em cálculos exatos.
+- **Opção 5a — Configuração Exclusiva de Workers JVM via `-Dstudy.workerJvmArgs` ([`ProcessIsolatedHypervolumeExecutor.java`](src/main/java/br/usp/lti/newmoea/util/ProcessIsolatedHypervolumeExecutor.java), [`IsolatedJobExecutor.java`](src/main/java/br/usp/lti/newmoea/util/IsolatedJobExecutor.java), [`WFGStudy.java`](src/main/java/br/usp/lti/newmoea/study/WFGStudy.java)):**
+  - Injeção de flags JVM em `executeJobInSubprocess` e `computeExactOnly` com validação *fail-fast* em `WFGStudy.main()`.
+  - **Defesas (`parseWorkerJvmArgs`):** tokenizer compatível com aspas e caminhos Windows (preservando `\`), bloqueio de flags reservadas ao supervisor (`-cp`, `-classpath`, `--class-path`, `-jar`, `-m`, `--module`, `-p`, `--module-path`, `-version`, `--help`), validação de `-Xms`/`-Xmx`, rejeição de `-Xmx < 64m` ou `-Xms > -Xmx`, e aviso único para `-Xmx < 384 MiB`.
+- **Documentação Atualizada:** [`docs/guia-execucao-otimizacao-recursos.md`](docs/guia-execucao-otimizacao-recursos.md), [`docs/pipeline-pos_processamento.md`](docs/pipeline-pos_processamento.md), [`README.md`](README.md) e [`HANDLER.md`](HANDLER.md). *(Nota: registros históricos das fases anteriores preservados integralmente; os novos testes automatizados foram incorporados em `StudyBudgetIsolationAndResumeIntegrationTest` e `StudyIndicatorPipelineIntegrationTest`).*
+- **Verificação (`mvn clean test` integral sem exclusões):** **400 testes executados em 27 classes, 0 falhas, 0 erros, 0 ignorados (`BUILD SUCCESS` em 04:11 min)**. Os diretórios protegidos (`MOEAD_Weights/`, `pareto_fronts/`, `pareto/`) permaneceram intactos e a campanha completa (`17.280` jobs) segue aguardando execução pelo operador.

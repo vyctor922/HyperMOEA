@@ -939,12 +939,15 @@ public final class PerformanceProfiler {
      * aplicando o escopo granular da flag {@code -DreplaceZeroFronts}.
      */
     public static Path resolveReferenceFrontPath(String problemName, int m, String algorithmName) {
+        Path configuredFrontRoot = Path.of(WFGStudy.getReferenceFrontDirectory());
+        Path pfGen = configuredFrontRoot.resolve("pf_gen");
+        Path pfLowZero = configuredFrontRoot.resolve("pf_lowzero_gen");
         return ParetoFrontValidator.resolveCanonicalReferenceFront(
                 problemName,
                 m,
-                null,
-                null,
-                null,
+                configuredFrontRoot,
+                pfGen,
+                pfLowZero,
                 algorithmName,
                 true);
     }
@@ -1882,5 +1885,126 @@ public final class PerformanceProfiler {
             return "";
         }
         return token.replace(",", ";").trim();
+    }
+
+    /**
+     * Snapshot de telemetria de recursos distinguindo explicitamente memória de
+     * heap compartilhada
+     * da JVM ({@code JVM_PROCESS_SHARED_HEAP}), tempo total de CPU reportado pelo
+     * SO para o
+     * processo atual ({@link ProcessHandle.Info#totalCpuDuration()}) e
+     * especificações do hardware /
+     * runtime (T36).
+     */
+    public record ProcessResourceSnapshot(
+            long pid,
+            int availableProcessors,
+            String osName,
+            String javaVersion,
+            String memoryScope,
+            double heapUsedMb,
+            double heapPeakMb,
+            double nonHeapUsedMb,
+            long osProcessCpuMs) {
+    }
+
+    public static ProcessResourceSnapshot captureProcessAndJvmResourceSnapshot() {
+        MemorySnapshot mem = captureMemorySnapshot();
+        ProcessHandle ph = ProcessHandle.current();
+        long osCpuMs = ph.info()
+                .totalCpuDuration()
+                .map(java.time.Duration::toMillis)
+                .orElse(-1L);
+        return new ProcessResourceSnapshot(
+                ph.pid(),
+                Runtime.getRuntime().availableProcessors(),
+                System.getProperty("os.name", "unknown"),
+                System.getProperty("java.version", "unknown"),
+                "JVM_PROCESS_SHARED_HEAP",
+                mem.heapUsedMb(),
+                mem.heapPeakMb(),
+                mem.nonHeapUsedMb(),
+                osCpuMs);
+    }
+
+    /**
+     * Exporta em {@code <studyOutputDir>/profiling/job_execution_profile.csv} a
+     * telemetria real dos
+     * jobs executados/consolidados no estudo ({@code wall_time_ms} e
+     * {@code worker_cpu_time_ms}
+     * medidos separadamente por job sobre a frente canônica completa
+     * {@code FULL_CANONICAL_FRONT},
+     * mais metadados de hardware, paralelismo, isolamento e abrangência de memória)
+     * (T36).
+     */
+    public static Path exportStudyExecutionProfileCsv(
+            Path studyOutputDir,
+            List<IsolatedJobExecutor.JobExecutionResult> newlyExecutedResults,
+            int parallelWorkers,
+            boolean processIsolation) throws IOException {
+        Objects.requireNonNull(studyOutputDir, "studyOutputDir não pode ser nulo.");
+        Path profDir = studyOutputDir.resolve("profiling");
+        Files.createDirectories(profDir);
+        Path outCsv = profDir.resolve("job_execution_profile.csv");
+
+        Map<String, String> rowsByKey = new LinkedHashMap<>();
+        if (Files.isRegularFile(outCsv) && Files.size(outCsv) > 0L) {
+            for (String line : Files.readAllLines(outCsv, StandardCharsets.UTF_8)) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("problem,")) {
+                    continue;
+                }
+                String[] parts = trimmed.split(",", -1);
+                if (parts.length >= 4) {
+                    String k = parts[0] + "|" + parts[1] + "|" + parts[2] + "|" + parts[3];
+                    rowsByKey.put(k, trimmed);
+                }
+            }
+        }
+
+        ProcessResourceSnapshot snap = captureProcessAndJvmResourceSnapshot();
+        for (IsolatedJobExecutor.JobExecutionResult r : newlyExecutedResults) {
+            IsolatedJobExecutor.JobSpec s = r.spec();
+            String key = s.problemName() + "|" + s.m() + "|" + s.algorithmName() + "|" + s.runId();
+            String row = String.format(
+                    Locale.US,
+                    "%s,%d,%s,%d,%d,%d,%d,%d,%d,FULL_CANONICAL_FRONT,%d,%d,%d,%b,%s,%.3f,%.3f,%d,%d,\"%s\",\"%s\"",
+                    s.problemName(),
+                    s.m(),
+                    s.algorithmName(),
+                    s.runId(),
+                    s.populationSize(),
+                    s.targetEvaluations(),
+                    r.actualEvaluations(),
+                    r.rawResultSize(),
+                    r.nonDominatedResultSize(),
+                    r.wallTimeMs(),
+                    r.cpuTimeMs(),
+                    parallelWorkers,
+                    processIsolation,
+                    snap.memoryScope(),
+                    snap.heapUsedMb(),
+                    snap.heapPeakMb(),
+                    snap.osProcessCpuMs(),
+                    snap.availableProcessors(),
+                    escapeCsvToken(snap.osName()),
+                    escapeCsvToken(snap.javaVersion()));
+            rowsByKey.put(key, row);
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(
+                "problem,m,algorithm,run_id,population_size,target_evaluations,actual_evaluations,"
+                        + "raw_result_size,canonical_nondominated_size,front_scope,"
+                        + "job_wall_ms,worker_cpu_ms,parallel_workers,process_isolation,"
+                        + "memory_scope,jvm_heap_used_mb,jvm_heap_peak_mb,os_process_cpu_ms,"
+                        + "available_processors,os_name,java_version\n");
+        for (String row : rowsByKey.values()) {
+            sb.append(row).append('\n');
+        }
+        Path tmp = outCsv.resolveSibling(outCsv.getFileName() + ".tmp");
+        Files.writeString(tmp, sb.toString(), StandardCharsets.UTF_8);
+        Files.move(tmp, outCsv, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        return outCsv;
     }
 }

@@ -1372,6 +1372,252 @@ public final class ParetoFrontValidator {
     }
 
     /**
+     * Gera matematicamente uma frente de Pareto analítica exata para qualquer
+     * problema da suíte
+     * {@code WFG1}–{@code WFG9} (Huband et al., 2006; {@code Shapes.java} no jMetal
+     * 7.8) com
+     * fatores de escala \(S_j = 2j\) e parâmetro de distância ótimo \(x_m = 0\):
+     * <ul>
+     * <li>{@code WFG1}: forma convexa em \(f_1, \dots, f_{m-1}\) e mista
+     * convexa/côncava em
+     * \(f_m\) (\(A = 5, \alpha = 1\));</li>
+     * <li>{@code WFG2}: forma convexa em \(f_1, \dots, f_{m-1}\) e desconexa em
+     * \(f_m\)
+     * (\(A = 5, \alpha = 1, \beta = 1\)), filtrada estritamente para manter apenas
+     * os
+     * componentes mutuamente não-dominados;</li>
+     * <li>{@code WFG3}: variedade linear degenerada 1D (\(a_1 = 1, a_2 = \dots =
+     * a_{m-1} = 0
+     * \implies x_2 = \dots = x_{m-1} = 0.5\) e \(x_1 \in [0, 1]\));</li>
+     * <li>{@code WFG4}–{@code WFG9}: hiper-elipsoide côncavo \(\sum_{j=1}^m (f_j /
+     * (2j))^2 = 1\).</li>
+     * </ul>
+     */
+    public static double[][] generateAnalyticalWfgFront(
+            String problemName, int m, int outerDivisions, int innerDivisions) {
+        if (m < 2) {
+            throw new IllegalArgumentException("O número de objetivos m deve ser >= 2, mas foi: " + m);
+        }
+        String canonical = StaticParams.normalizeProblemId(problemName);
+        if (!canonical.startsWith("WFG")) {
+            throw new IllegalArgumentException(
+                    "Problema não pertence à suíte WFG1..WFG9: " + problemName);
+        }
+
+        int targetPoints = Math.max(StaticParams.getPopulationSize(m), 100);
+        return switch (canonical) {
+            case "WFG1" -> generateAnalyticalWfg1Front(m, outerDivisions, innerDivisions);
+            case "WFG2" -> generateAnalyticalWfg2Front(m, outerDivisions, innerDivisions, targetPoints);
+            case "WFG3" -> generateAnalyticalWfg3Line(m, targetPoints);
+            case "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9" ->
+                generateAnalyticalWfg4To9Concave(m, outerDivisions, innerDivisions);
+            default -> throw new IllegalArgumentException("Problema WFG não suportado: " + canonical);
+        };
+    }
+
+    private static double[][] generateAnalyticalWfg4To9Concave(
+            int m, int outerDivisions, int innerDivisions) {
+        double[][] unitSphere = generateAnalyticalDtlz2To4(m, outerDivisions, innerDivisions);
+        double[][] scaled = new double[unitSphere.length][m];
+        for (int i = 0; i < unitSphere.length; i++) {
+            for (int j = 0; j < m; j++) {
+                scaled[i][j] = 2.0 * (j + 1) * unitSphere[i][j];
+            }
+        }
+        return scaled;
+    }
+
+    private static double[][] generateAnalyticalWfg3Line(int m, int numPoints) {
+        int count = Math.max(2, numPoints);
+        double[][] front = new double[count][m];
+        double[] x = new double[m - 1];
+        if (m > 2) {
+            Arrays.fill(x, 1, m - 1, 0.5);
+        }
+        for (int i = 0; i < count; i++) {
+            x[0] = (double) i / (double) (count - 1);
+            for (int obj = 1; obj <= m; obj++) {
+                front[i][obj - 1] = 2.0 * obj * wfgShapeLinear(x, obj);
+            }
+        }
+        return filterNonDominatedAndUnique(front, DEFAULT_DUPLICATE_TOLERANCE);
+    }
+
+    private static double[][] generateAnalyticalWfg1Front(
+            int m, int outerDivisions, int innerDivisions) {
+        double[][] simplex = ReferenceSetValidator.generateCanonicalTwoLayers(
+                m, outerDivisions, innerDivisions);
+        List<double[]> candidates = new ArrayList<>(simplex.length);
+        for (double[] w : simplex) {
+            double[] xPos = simplexVectorToPositionParameters(w);
+            double[] f = new double[m];
+            for (int obj = 1; obj <= m - 1; obj++) {
+                f[obj - 1] = 2.0 * obj * wfgShapeConvex(xPos, obj);
+            }
+            f[m - 1] = 2.0 * m * wfgShapeMixed(xPos[0], 5, 1.0);
+            candidates.add(f);
+        }
+        return filterNonDominatedAndUnique(
+                candidates.toArray(double[][]::new), DEFAULT_DUPLICATE_TOLERANCE);
+    }
+
+    private static double[][] generateAnalyticalWfg2Front(
+            int m, int outerDivisions, int innerDivisions, int targetPoints) {
+        List<double[]> candidates = new ArrayList<>(Math.max(targetPoints * 4, 512));
+        if (m == 2) {
+            int denseSamples = Math.max(2000, targetPoints * 20);
+            double[] xPos = new double[1];
+            for (int i = 0; i <= denseSamples; i++) {
+                xPos[0] = (double) i / (double) denseSamples;
+                double[] f = new double[2];
+                f[0] = 2.0 * wfgShapeConvex(xPos, 1);
+                f[1] = 4.0 * wfgShapeDisconnected(xPos[0], 5, 1.0, 1.0);
+                candidates.add(f);
+            }
+        } else {
+            // Amostra densamente x_1 nos intervalos desconexos e combina com direções
+            // canônicas em x_2..x_{m-1}
+            int subH1 = StaticParams.getOuterDivisions(m - 1 > 1 ? getSupportedSubDimension(m - 1) : 2);
+            double[][] baseSimplex = ReferenceSetValidator.generateCanonicalTwoLayers(
+                    m, outerDivisions, innerDivisions);
+            int x1Grid = 60;
+            for (int g = 0; g <= x1Grid; g++) {
+                double x1 = (double) g / (double) x1Grid;
+                // Verifica se x1 não é dominado em h_disc por valores menores de x1 (otimização
+                // rápida)
+                for (int s = 0; s < baseSimplex.length; s += Math.max(1, baseSimplex.length / Math.max(12, subH1))) {
+                    double[] xPos = simplexVectorToPositionParameters(baseSimplex[s]);
+                    xPos[0] = x1;
+                    double[] f = new double[m];
+                    for (int obj = 1; obj <= m - 1; obj++) {
+                        f[obj - 1] = 2.0 * obj * wfgShapeConvex(xPos, obj);
+                    }
+                    f[m - 1] = 2.0 * m * wfgShapeDisconnected(xPos[0], 5, 1.0, 1.0);
+                    candidates.add(f);
+                }
+            }
+            for (double[] w : baseSimplex) {
+                double[] xPos = simplexVectorToPositionParameters(w);
+                double[] f = new double[m];
+                for (int obj = 1; obj <= m - 1; obj++) {
+                    f[obj - 1] = 2.0 * obj * wfgShapeConvex(xPos, obj);
+                }
+                f[m - 1] = 2.0 * m * wfgShapeDisconnected(xPos[0], 5, 1.0, 1.0);
+                candidates.add(f);
+            }
+        }
+        return filterNonDominatedAndUnique(
+                candidates.toArray(double[][]::new), DEFAULT_DUPLICATE_TOLERANCE);
+    }
+
+    private static int getSupportedSubDimension(int dim) {
+        if (dim <= 2)
+            return 2;
+        if (dim <= 3)
+            return 3;
+        if (dim <= 5)
+            return 5;
+        if (dim <= 8)
+            return 8;
+        if (dim <= 10)
+            return 10;
+        return 15;
+    }
+
+    private static double[] simplexVectorToPositionParameters(double[] w) {
+        int m = w.length;
+        double normSq = 0.0;
+        for (double v : w) {
+            normSq += v * v;
+        }
+        double norm = normSq > 0.0 ? Math.sqrt(normSq) : 1.0;
+        double[] u = new double[m];
+        for (int j = 0; j < m; j++) {
+            u[j] = w[j] / norm;
+        }
+        double[] x = new double[m - 1];
+        for (int i = 0; i < m - 1; i++) {
+            int k = m - 1 - i;
+            double prefixSq = 0.0;
+            for (int r = 0; r < k; r++) {
+                prefixSq += u[r] * u[r];
+            }
+            double theta = Math.atan2(u[k], Math.sqrt(prefixSq));
+            x[i] = clamp01(1.0 - (theta / (0.5 * Math.PI)));
+        }
+        return x;
+    }
+
+    private static double wfgShapeLinear(double[] x, int objOneBased) {
+        int m = x.length + 1;
+        double result = 1.0;
+        for (int i = 1; i <= m - objOneBased; i++) {
+            result *= x[i - 1];
+        }
+        if (objOneBased != 1) {
+            result *= (1.0 - x[m - objOneBased]);
+        }
+        return Math.max(0.0, result);
+    }
+
+    private static double wfgShapeConvex(double[] x, int objOneBased) {
+        int m = x.length + 1;
+        double result = 1.0;
+        for (int i = 1; i <= m - objOneBased; i++) {
+            result *= (1.0 - Math.cos(0.5 * Math.PI * x[i - 1]));
+        }
+        if (objOneBased != 1) {
+            result *= (1.0 - Math.sin(0.5 * Math.PI * x[m - objOneBased]));
+        }
+        return Math.max(0.0, result);
+    }
+
+    private static double wfgShapeMixed(double x1, int a, double alpha) {
+        double term = Math.cos(2.0 * a * Math.PI * x1 + 0.5 * Math.PI) / (2.0 * a * Math.PI);
+        double base = Math.max(0.0, 1.0 - x1 - term);
+        return Math.pow(base, alpha);
+    }
+
+    private static double wfgShapeDisconnected(double x1, int a, double alpha, double beta) {
+        double cosVal = Math.cos(a * Math.pow(x1, beta) * Math.PI);
+        return Math.max(0.0, 1.0 - Math.pow(x1, alpha) * (cosVal * cosVal));
+    }
+
+    /**
+     * Gera e persiste atomicamente uma frente analítica validada para um problema
+     * {@code WFG1}–{@code WFG9}
+     * em {@code outputDir} (ex.:
+     * {@code resources/referenceFronts/pf_gen/WFG4.5D.csv}) sem jamais
+     * tocar em {@code pareto_fronts/csv/}.
+     */
+    public static GeneratedFrontReport generateAndSaveAnalyticalWfgFront(
+            String problemName,
+            int m,
+            int outerDivisions,
+            int innerDivisions,
+            Path outputDir,
+            boolean enabled) {
+        if (!enabled) {
+            return new GeneratedFrontReport(null, null, "ANALYTICAL", false, false, null);
+        }
+        assertNotProtectedParetoFrontsDir(outputDir);
+        String canonical = StaticParams.normalizeProblemId(problemName);
+        double[][] front = generateAnalyticalWfgFront(canonical, m, outerDivisions, innerDivisions);
+        String fileName = String.format("%s.%dD.csv", canonical, m);
+        Path targetFile = writeFrontCsvWithoutOverwrite(outputDir, fileName, front);
+        FrontValidationSummary summary = validateParetoFrontFile(targetFile, m);
+        if (canonical.equals("WFG4")
+                || canonical.equals("WFG5")
+                || canonical.equals("WFG6")
+                || canonical.equals("WFG7")
+                || canonical.equals("WFG8")
+                || canonical.equals("WFG9")) {
+            validateWfgConcaveEllipsoid(summary.points(), 1e-5);
+        }
+        return new GeneratedFrontReport(targetFile, null, "ANALYTICAL", true, true, summary);
+    }
+
+    /**
      * Gera e persiste uma frente analítica validada para um problema DTLZ em
      * {@code outputDir}
      * (ex.: {@code resources/referenceFronts/pf_gen/DTLZ1.5D.csv}) sem jamais
@@ -1527,6 +1773,8 @@ public final class ParetoFrontValidator {
      *                                ausente em disco
      * @return caminho {@link Path} do arquivo de frente resolvido
      */
+    private static final java.util.concurrent.ConcurrentHashMap<Path, Object> FRONT_GENERATION_LOCKS = new java.util.concurrent.ConcurrentHashMap<>();
+
     public static Path resolveCanonicalReferenceFront(
             String problemName,
             int m,
@@ -1538,54 +1786,202 @@ public final class ParetoFrontValidator {
         if (m < 2) {
             throw new IllegalArgumentException("O número de objetivos m deve ser >= 2, mas foi: " + m);
         }
-        String canonicalProblem = StaticParams.normalizeProblemId(problemName);
+        if (problemName == null || problemName.isBlank()) {
+            throw new IllegalArgumentException("O nome do problema não pode ser nulo ou vazio.");
+        }
+        String canonicalProblem = problemName.trim().toUpperCase(java.util.Locale.ROOT);
+        if (canonicalProblem.contains("_")) {
+            canonicalProblem = canonicalProblem.substring(0, canonicalProblem.indexOf('_'));
+        }
         String fileName = String.format("%s.%dD.csv", canonicalProblem, m);
-        boolean isDtlz = canonicalProblem.startsWith("DTLZ");
+        boolean isDtlz = canonicalProblem.matches("DTLZ[1-7]");
+        boolean isWfg = canonicalProblem.matches("WFG[1-9]");
 
         Path targetPfLowZeroDir = pfLowZeroDir != null ? pfLowZeroDir : DEFAULT_LOWZERO_PF_GEN_DIR;
         Path targetPfGenDir = pfGenDir != null ? pfGenDir : DEFAULT_ANALYTICAL_PF_GEN_DIR;
         Path targetCanonicalDir = canonicalBaseDir != null ? canonicalBaseDir : DEFAULT_CANONICAL_REFERENCE_FRONTS_DIR;
 
-        if (useLowZero) {
-            Path lowZeroFile = targetPfLowZeroDir.resolve(fileName);
-            if (Files.isRegularFile(lowZeroFile)) {
-                return lowZeroFile;
+        assertNotProtectedParetoFrontsDir(targetCanonicalDir);
+        assertNotProtectedParetoFrontsDir(targetPfGenDir);
+        assertNotProtectedParetoFrontsDir(targetPfLowZeroDir);
+
+        Path lockKey = (useLowZero ? targetPfLowZeroDir : targetPfGenDir)
+                .toAbsolutePath()
+                .normalize()
+                .resolve(fileName);
+        Object frontLock = FRONT_GENERATION_LOCKS.computeIfAbsent(lockKey, k -> new Object());
+        synchronized (frontLock) {
+            if (useLowZero) {
+                Path lowZeroFile = targetPfLowZeroDir.resolve(fileName);
+                if (Files.isRegularFile(lowZeroFile)
+                        && isValidCandidateReferenceFront(lowZeroFile, canonicalProblem, m, false, true)) {
+                    return lowZeroFile;
+                }
+                // Não existe ou está inválido em pf_lowzero_gen: resolve o canônico (1 -> 2 ->
+                // 3) e deriva a variante
+                Path baseCanonical = resolveCanonicalReferenceFront(
+                        problemName, m, targetCanonicalDir, targetPfGenDir, targetPfLowZeroDir, false,
+                        allowOnDemandGeneration);
+                GeneratedFrontReport rep = createLowZeroVariantFromFile(
+                        baseCanonical, targetPfLowZeroDir, DEFAULT_ZERO_FRONT_REPLACEMENT, m, true);
+                return rep.outputFile();
             }
-            // Não existe em pf_lowzero_gen: resolve o canônico (1 -> 2 -> 3) e deriva a
-            // variante
-            Path baseCanonical = resolveCanonicalReferenceFront(
-                    problemName, m, targetCanonicalDir, targetPfGenDir, targetPfLowZeroDir, false,
-                    allowOnDemandGeneration);
-            GeneratedFrontReport rep = createLowZeroVariantFromFile(
-                    baseCanonical, targetPfLowZeroDir, DEFAULT_ZERO_FRONT_REPLACEMENT, m, true);
-            return rep.outputFile();
-        }
 
-        // 1. resources/referenceFronts/
-        Path canonicalFile = targetCanonicalDir.resolve(fileName);
-        if (Files.isRegularFile(canonicalFile)) {
-            return canonicalFile;
-        }
+            StringBuilder diagnostics = new StringBuilder();
 
-        // 2. resources/referenceFronts/pf_gen/
-        Path pfGenFile = targetPfGenDir.resolve(fileName);
-        if (Files.isRegularFile(pfGenFile)) {
-            return pfGenFile;
-        }
+            // 1. resources/referenceFronts/ (seleciona SOMENTE se o conteúdo for
+            // matematicamente/estruturalmente válido)
+            Path canonicalFile = targetCanonicalDir.resolve(fileName);
+            if (Files.isRegularFile(canonicalFile)) {
+                if (isValidCandidateReferenceFront(canonicalFile, canonicalProblem, m, false, false)) {
+                    return canonicalFile;
+                }
+                diagnostics.append(" [candidato oficial rejeitado por conteúdo inválido: ")
+                        .append(canonicalFile)
+                        .append("]");
+            }
 
-        // 3. Geração por código somente quando ausente nas fontes anteriores
-        if (isDtlz && allowOnDemandGeneration) {
-            int h1 = StaticParams.getOuterDivisions(m);
-            int h2 = StaticParams.getInnerDivisions(m);
-            GeneratedFrontReport report = generateAndSaveAnalyticalDtlzFront(
-                    canonicalProblem, m, h1, h2, targetPfGenDir, true);
-            return report.outputFile();
-        }
+            // 1.b. Fallback opcional (desativado por padrão:
+            // -Dstudy.restoreOfficialJMetalResources=false)
+            // para extrair/restaurar o arquivo oficial do jMetal 7.8 a partir do
+            // repositório oficial no GitHub
+            if (ReferenceSetValidator.isRestoreOfficialJMetalResourcesEnabled()
+                    && tryRestoreOfficialJMetalReferenceFront(canonicalFile, fileName, canonicalProblem, m)) {
+                if (isValidCandidateReferenceFront(canonicalFile, canonicalProblem, m, false, false)) {
+                    return canonicalFile;
+                }
+            }
 
-        throw new IllegalArgumentException(
-                String.format(
-                        "Frente de Pareto não encontrada na hierarquia canônica (1: %s, 2: %s, 3: geração por código) para problema=%s, m=%d.",
-                        targetCanonicalDir, targetPfGenDir, canonicalProblem, m));
+            // 2. resources/referenceFronts/pf_gen/ (frentes puramente analíticas validadas)
+            Path pfGenFile = targetPfGenDir.resolve(fileName);
+            if (Files.isRegularFile(pfGenFile)) {
+                if (isValidCandidateReferenceFront(pfGenFile, canonicalProblem, m, true, false)) {
+                    return pfGenFile;
+                }
+                diagnostics.append(" [candidato pf_gen rejeitado por conteúdo inválido: ")
+                        .append(pfGenFile)
+                        .append("]");
+            }
+
+            // 3. Geração analítica por código (DTLZ1–DTLZ7 e WFG1–WFG9) quando
+            // ausente/inválida nas fontes anteriores
+            if (allowOnDemandGeneration) {
+                int h1 = StaticParams.getOuterDivisions(m);
+                int h2 = StaticParams.getInnerDivisions(m);
+                if (isDtlz) {
+                    GeneratedFrontReport report = generateAndSaveAnalyticalDtlzFront(
+                            canonicalProblem, m, h1, h2, targetPfGenDir, true);
+                    return report.outputFile();
+                }
+                if (isWfg) {
+                    GeneratedFrontReport report = generateAndSaveAnalyticalWfgFront(
+                            canonicalProblem, m, h1, h2, targetPfGenDir, true);
+                    return report.outputFile();
+                }
+                diagnostics.append(" [sem gerador analítico para ")
+                        .append(canonicalProblem)
+                        .append("]");
+            }
+
+            throw new IllegalArgumentException(
+                    String.format(
+                            "Frente de Pareto válida não encontrada na hierarquia canônica (1: %s, 2: %s, 3: geração por código=%s) para problema=%s, m=%d.%s",
+                            targetCanonicalDir,
+                            targetPfGenDir,
+                            allowOnDemandGeneration,
+                            canonicalProblem,
+                            m,
+                            diagnostics));
+        }
+    }
+
+    private static boolean isValidCandidateReferenceFront(
+            Path file,
+            String canonicalProblem,
+            int expectedM,
+            boolean enforceAnalyticalPfGenPurity,
+            boolean enforceLowZeroPositive) {
+        try {
+            FrontValidationSummary summary = validateParetoFrontFile(file, expectedM);
+            double[][] pts = summary.points();
+            if (pts == null || pts.length == 0) {
+                return false;
+            }
+            // Rejeita conjuntos onde todos os pontos colapsam ou há soluções estritamente
+            // dominadas em pf_gen
+            int dominated = countDominatedPoints(pts, DEFAULT_DUPLICATE_TOLERANCE);
+            if (enforceAnalyticalPfGenPurity && dominated > 0) {
+                return false;
+            }
+            // Em frentes oficiais, verifica limites superiores compatíveis com a família do
+            // problema (com margem para WFG3.2D histórico)
+            double[] upperBounds = StaticParams.getParetoFrontUpperBounds(canonicalProblem, expectedM);
+            double maxFactor = ("WFG3".equals(canonicalProblem) && expectedM == 2 && !enforceAnalyticalPfGenPurity)
+                    ? 1.55
+                    : 1.05;
+            boolean hasZero = false;
+            for (double[] row : pts) {
+                for (int j = 0; j < expectedM; j++) {
+                    double v = row[j];
+                    if (!Double.isFinite(v)) {
+                        return false;
+                    }
+                    if (v == 0.0) {
+                        hasZero = true;
+                    }
+                    if (enforceLowZeroPositive && v <= 0.0) {
+                        return false;
+                    }
+                    if (v > upperBounds[j] * maxFactor + 1e-4) {
+                        return false;
+                    }
+                }
+            }
+            if (enforceAnalyticalPfGenPurity
+                    && !enforceLowZeroPositive
+                    && !hasZero
+                    && !"DTLZ7".equals(canonicalProblem)) {
+                // Frentes analíticas puras em pf_gen/ (exceto DTLZ7 desconexo quando aplicável)
+                // contêm os vértices de fronteira com 0.0
+                return false;
+            }
+            return true;
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    /**
+     * Tenta restaurar atomicamente uma frente de Pareto oficial do jMetal 7.8
+     * ({@code {PROBLEM}.{m}D.csv}) em {@code targetOfficialFile} a partir da tag
+     * oficial
+     * {@code jmetal-7.8} no GitHub
+     * ({@code <baseUrl>/referenceFrontsCSV/<fileName>}) quando
+     * {@link ReferenceSetValidator#isRestoreOfficialJMetalResourcesEnabled()} está
+     * ativo.
+     * <p>
+     * Nunca acessa {@code pareto_fronts/}, {@code pareto_fronts/csv/},
+     * {@code MOEAD_Weights/} ou
+     * a cópia externa local modificada do jMetal.
+     */
+    public static boolean tryRestoreOfficialJMetalReferenceFront(
+            Path targetOfficialFile, String fileName, String canonicalProblem, int m) {
+        if (targetOfficialFile == null || fileName == null || fileName.isBlank()) {
+            return false;
+        }
+        assertNotProtectedParetoFrontsDir(
+                targetOfficialFile.getParent() != null ? targetOfficialFile.getParent() : targetOfficialFile);
+        String remoteUrl = ReferenceSetValidator.getOfficialJMetalRawBaseUrl() + "/referenceFrontsCSV/" + fileName;
+        return ReferenceSetValidator.tryDownloadAndValidateOfficialResource(
+                remoteUrl,
+                targetOfficialFile,
+                tempCandidate -> {
+                    if (!isValidCandidateReferenceFront(
+                            tempCandidate, canonicalProblem, m, false, false)) {
+                        throw new IllegalArgumentException(
+                                "Frente restaurada inválida para " + canonicalProblem + " m=" + m);
+                    }
+                });
     }
 
     /**
@@ -1638,15 +2034,50 @@ public final class ParetoFrontValidator {
                 : DEFAULT_CANONICAL_REFERENCE_FRONTS_DIR;
         Path pfGen = (baseDir != null) ? baseDir.resolve(DEFAULT_ANALYTICAL_PF_GEN_DIR) : DEFAULT_ANALYTICAL_PF_GEN_DIR;
         Path pfLowZero = (baseDir != null) ? baseDir.resolve(DEFAULT_LOWZERO_PF_GEN_DIR) : DEFAULT_LOWZERO_PF_GEN_DIR;
+        return resolveCanonicalFrontArtifactFromDirs(
+                problemName, m, canonicalBase, pfGen, pfLowZero, useLowZero, allowOnDemandGeneration);
+    }
 
-        Path resolvedPath = resolveCanonicalReferenceFront(problemName, m, canonicalBase, pfGen, pfLowZero, useLowZero,
-                allowOnDemandGeneration);
+    /**
+     * Resolve o artefato estruturado {@link ResolvedFrontArtifact} diretamente a
+     * partir do diretório
+     * raiz configurado de frentes de referência (ex.:
+     * {@code -Dstudy.referenceFrontDirectory}),
+     * derivando {@code pf_gen/} e {@code pf_lowzero_gen/} sob esse diretório (T34).
+     */
+    public static ResolvedFrontArtifact resolveCanonicalFrontArtifactFromFrontRoot(
+            String problemName,
+            int m,
+            Path frontRootDir,
+            boolean useLowZero,
+            boolean allowOnDemandGeneration) {
+        Path canonicalBase = (frontRootDir != null) ? frontRootDir : DEFAULT_CANONICAL_REFERENCE_FRONTS_DIR;
+        Path pfGen = canonicalBase.resolve("pf_gen");
+        Path pfLowZero = canonicalBase.resolve("pf_lowzero_gen");
+        return resolveCanonicalFrontArtifactFromDirs(
+                problemName, m, canonicalBase, pfGen, pfLowZero, useLowZero, allowOnDemandGeneration);
+    }
+
+    private static ResolvedFrontArtifact resolveCanonicalFrontArtifactFromDirs(
+            String problemName,
+            int m,
+            Path canonicalBase,
+            Path pfGen,
+            Path pfLowZero,
+            boolean useLowZero,
+            boolean allowOnDemandGeneration) {
+        Path resolvedPath = resolveCanonicalReferenceFront(
+                problemName, m, canonicalBase, pfGen, pfLowZero, useLowZero, allowOnDemandGeneration);
         PhysicalFrontAuditRow audit = auditPhysicalFrontFile(resolvedPath);
 
+        Path normRes = resolvedPath.toAbsolutePath().normalize();
+        Path normLowZero = pfLowZero.toAbsolutePath().normalize();
+        Path normPfGen = pfGen.toAbsolutePath().normalize();
+
         String category;
-        if (resolvedPath.startsWith(pfLowZero)) {
+        if (normRes.startsWith(normLowZero)) {
             category = "LOWZERO_GEN";
-        } else if (resolvedPath.startsWith(pfGen)) {
+        } else if (normRes.startsWith(normPfGen)) {
             category = "PF_GEN";
         } else {
             category = "OFFICIAL";
@@ -1764,15 +2195,13 @@ public final class ParetoFrontValidator {
         if (outputDir == null) {
             throw new IllegalArgumentException("O diretório de saída não pode ser nulo.");
         }
-        Path normalizedOut = outputDir.toAbsolutePath().normalize();
-        // Protege os diretórios legados pareto_fronts/csv/, pareto_fronts/,
-        // MOEAD_Weights/ e pareto/ contra gravação ou sobrescrita.
+        Path normalizedOut = resolveRealOrNormalizedPath(outputDir);
         String[] protectedLabels = { "pareto_fronts/csv/", "pareto_fronts/", "MOEAD_Weights/", "pareto/" };
         Path[] protectedDirs = {
-                Path.of("pareto_fronts", "csv").toAbsolutePath().normalize(),
-                Path.of("pareto_fronts").toAbsolutePath().normalize(),
-                Path.of("MOEAD_Weights").toAbsolutePath().normalize(),
-                Path.of("pareto").toAbsolutePath().normalize()
+                resolveRealOrNormalizedPath(Path.of("pareto_fronts", "csv")),
+                resolveRealOrNormalizedPath(Path.of("pareto_fronts")),
+                resolveRealOrNormalizedPath(Path.of("MOEAD_Weights")),
+                resolveRealOrNormalizedPath(Path.of("pareto"))
         };
         for (int i = 0; i < protectedDirs.length; i++) {
             if (normalizedOut.startsWith(protectedDirs[i])) {
@@ -1783,6 +2212,25 @@ public final class ParetoFrontValidator {
                                 + outputDir);
             }
         }
+        for (Path seg : normalizedOut) {
+            String s = seg.toString();
+            if ("pareto_fronts".equals(s) || "MOEAD_Weights".equals(s) || "pareto".equals(s)) {
+                throw new IllegalArgumentException(
+                        "Proibido usar caminho legado protegido (" + s + ") na resolução ativa: " + outputDir);
+            }
+        }
+    }
+
+    private static Path resolveRealOrNormalizedPath(Path p) {
+        Path abs = p.toAbsolutePath().normalize();
+        if (Files.exists(abs)) {
+            try {
+                return abs.toRealPath();
+            } catch (IOException ignored) {
+                return abs;
+            }
+        }
+        return abs;
     }
 
     private static Path writeFrontCsvWithoutOverwrite(
@@ -1802,9 +2250,27 @@ public final class ParetoFrontValidator {
             Files.createDirectories(outputDir);
             Path target = outputDir.resolve(baseFileName);
             if (Files.exists(target)) {
-                String existing = Files.readString(target, StandardCharsets.UTF_8);
-                if (existing.equals(content)) {
-                    return target;
+                try {
+                    String existing = Files.readString(target, StandardCharsets.UTF_8);
+                    if (existing.equals(content)) {
+                        return target;
+                    }
+                    // Se o arquivo existente estava corrompido/inválido em pf_gen ou
+                    // pf_lowzero_gen,
+                    // substitui atomicamente apenas se for inválido; se for outra frente válida
+                    // distinta, cria _vN.
+                    int expectedM = front.length > 0 ? front[0].length : 2;
+                    boolean existingValid = true;
+                    try {
+                        validateParetoFrontFile(target, expectedM);
+                    } catch (Exception invalidEx) {
+                        existingValid = false;
+                    }
+                    if (!existingValid) {
+                        atomicWriteString(outputDir, target, content);
+                        return target;
+                    }
+                } catch (IOException ignored) {
                 }
                 int suffix = 1;
                 String stem = baseFileName.endsWith(".csv")
@@ -1819,24 +2285,32 @@ public final class ParetoFrontValidator {
                     }
                     suffix++;
                 } while (Files.exists(candidate));
-                Files.writeString(
-                        candidate,
-                        content,
-                        StandardCharsets.UTF_8,
-                        java.nio.file.StandardOpenOption.CREATE_NEW,
-                        java.nio.file.StandardOpenOption.WRITE);
+                atomicWriteString(outputDir, candidate, content);
                 return candidate;
             }
-            Files.writeString(
-                    target,
-                    content,
-                    StandardCharsets.UTF_8,
-                    java.nio.file.StandardOpenOption.CREATE_NEW,
-                    java.nio.file.StandardOpenOption.WRITE);
+            atomicWriteString(outputDir, target, content);
             return target;
         } catch (IOException e) {
             throw new IllegalStateException(
                     "Falha ao gravar frente derivada em: " + outputDir, e);
+        }
+    }
+
+    private static void atomicWriteString(Path dir, Path target, String content) throws IOException {
+        Path tempFile = Files.createTempFile(dir, "tmp-pf-", ".csv.tmp");
+        try {
+            Files.writeString(tempFile, content, StandardCharsets.UTF_8);
+            try {
+                Files.move(
+                        tempFile,
+                        target,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException atomicUnsupported) {
+                Files.move(tempFile, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(tempFile);
         }
     }
 

@@ -23,6 +23,8 @@ public final class HypervolumeResult implements Serializable {
         SUCCESS_EXACT,
         TIMEOUT_FALLBACK_MC,
         CRASH_FALLBACK_MC,
+        TIMEOUT_NO_FALLBACK,
+        CRASH_NO_FALLBACK,
         DIRECT_MC,
         DEGENERATE_BOX,
         EMPTY_FRONT,

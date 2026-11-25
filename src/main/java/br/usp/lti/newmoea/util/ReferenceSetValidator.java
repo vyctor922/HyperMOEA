@@ -52,6 +52,31 @@ public final class ReferenceSetValidator {
     public static final String PERSIST_REFERENCE_DIRECTIONS_PROPERTY = "persistReferenceDirections";
 
     /**
+     * Nome da propriedade JVM para habilitar o fallback opcional de
+     * restauração/extração de
+     * recursos oficiais do jMetal 7.8 caso um arquivo oficial de
+     * {@code resources/referenceFronts/}
+     * ou {@code resources/weightVectorFiles/} tenha sido apagado ou corrompido.
+     * <p>
+     * Desativada ({@code false}) por padrão.
+     */
+    public static final String RESTORE_OFFICIAL_JMETAL_RESOURCES_PROPERTY = "study.restoreOfficialJMetalResources";
+
+    /**
+     * Propriedade opcional para sobrescrever a URL base oficial do repositório
+     * GitHub do jMetal 7.8
+     * ({@link #DEFAULT_OFFICIAL_JMETAL_GITHUB_RAW_BASE_URL}) em testes herméticos
+     * sem rede externa.
+     */
+    public static final String OFFICIAL_JMETAL_RAW_BASE_URL_PROPERTY = "study.officialJMetalRawBaseUrl";
+
+    /**
+     * URL base oficial imutável da tag {@code jmetal-7.8} no repositório oficial do
+     * jMetal no GitHub.
+     */
+    public static final String DEFAULT_OFFICIAL_JMETAL_GITHUB_RAW_BASE_URL = "https://raw.githubusercontent.com/jMetal/jMetal/jmetal-7.8/resources";
+
+    /**
      * Diretório padrão para persistência opcional de pontos de referência do
      * NSGA-III (T07).
      */
@@ -1376,6 +1401,45 @@ public final class ReferenceSetValidator {
     }
 
     /**
+     * Verifica se o hash SHA-256 de um arquivo coincide com o hash esperado do
+     * manifesto oficial,
+     * aceitando tanto os bytes brutos em disco quanto as variantes canônicas com
+     * quebra de linha
+     * {@code LF (\n)} ou {@code CRLF (\r\n)} (garantindo portabilidade total entre
+     * Linux, macOS,
+     * Windows e downloads diretos do GitHub raw).
+     */
+    public static boolean matchesExpectedSha256CrossPlatform(Path file, String expectedSha256) {
+        if (file == null || expectedSha256 == null || expectedSha256.isBlank()) {
+            return false;
+        }
+        String expected = expectedSha256.trim().toLowerCase(Locale.ROOT);
+        try {
+            byte[] rawBytes = Files.readAllBytes(file);
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            String rawSha = HexFormat.of().formatHex(digest.digest(rawBytes));
+            if (expected.equals(rawSha)) {
+                return true;
+            }
+            String text = new String(rawBytes, StandardCharsets.UTF_8);
+            String lfNormalized = text.replace("\r\n", "\n").replace("\r", "\n");
+            digest.reset();
+            String lfSha = HexFormat.of().formatHex(
+                    digest.digest(lfNormalized.getBytes(StandardCharsets.UTF_8)));
+            if (expected.equals(lfSha)) {
+                return true;
+            }
+            String crlfNormalized = lfNormalized.replace("\n", "\r\n");
+            digest.reset();
+            String crlfSha = HexFormat.of().formatHex(
+                    digest.digest(crlfNormalized.getBytes(StandardCharsets.UTF_8)));
+            return expected.equals(crlfSha);
+        } catch (IOException | NoSuchAlgorithmException e) {
+            return false;
+        }
+    }
+
+    /**
      * Verifica se a persistência opcional de pontos de referência do NSGA-III está
      * habilitada via
      * propriedade JVM {@code -DpersistReferencePoints=true}. Por padrão, retorna
@@ -1738,17 +1802,44 @@ public final class ReferenceSetValidator {
 
     /**
      * Informa se o {@code AbstractMOEAD.initializeUniformWeight()} do jMetal 7.8
-     * gera os vetores de
-     * pesos uniformes diretamente em memória para a combinação informada de
-     * objetivos e tamanho populacional.
+     * gera os vetores de pesos uniformes diretamente em memória para a combinação
+     * informada de objetivos e tamanho populacional.
+     *
+     * <p>
+     * Conforme inspeção de bytecode ({@code AbstractMOEAD.initializeUniformWeight},
+     * offsets {@code 0..72}), quando {@code m == 2 && populationSize <= 300}, o
+     * jMetal
+     * executa {@code a = 1.0 * n / (populationSize - 1)}, que exige
+     * {@code populationSize >= 2}
+     * (para {@code populationSize == 1}, {@code 0.0 / 0.0 = NaN}).
      *
      * @param m              número de objetivos
      * @param populationSize tamanho da população
-     * @return {@code true} se \(m = 2\) e \(N \le 300\); {@code false} caso
+     * @return {@code true} se \(m = 2\) e \(2 \le N \le 300\); {@code false} caso
      *         contrário
      */
     public static boolean isMoeadWeightGeneratedInMemory(int m, int populationSize) {
-        return m == 2 && populationSize <= 300;
+        return m == 2 && populationSize >= 2 && populationSize <= 300;
+    }
+
+    /**
+     * Gera exatamente os vetores uniformes 2D produzidos em memória por
+     * {@code AbstractMOEAD.initializeUniformWeight()} no jMetal 7.8 quando
+     * {@link #isMoeadWeightGeneratedInMemory(int, int)} é {@code true}.
+     */
+    public static double[][] generateJMetalMoead2DInMemoryWeights(int populationSize) {
+        if (!isMoeadWeightGeneratedInMemory(2, populationSize)) {
+            throw new IllegalArgumentException(
+                    "Geração em memória 2D do AbstractMOEAD aplica-se apenas a 2 <= N <= 300, recebido N="
+                            + populationSize);
+        }
+        double[][] lambda = new double[populationSize][2];
+        for (int n = 0; n < populationSize; n++) {
+            double a = (1.0 * n) / (populationSize - 1);
+            lambda[n][0] = a;
+            lambda[n][1] = 1.0 - a;
+        }
+        return lambda;
     }
 
     /**
@@ -1810,61 +1901,160 @@ public final class ReferenceSetValidator {
     }
 
     /**
+     * Resolve o artefato canônico de pesos com suporte explícito à política
+     * opcional de dispensa de
+     * arquivo em memória ({@code allowInMemoryDispensation}) quando aplicável à
+     * variante do jMetal 7.8
+     * (\(m = 2, 2 \le N \le 300\) e sem exigência de leitura em disco como no
+     * {@code GWASFGA}).
+     *
+     * <p>
+     * Quando {@code allowInMemoryDispensation == true} e a variante realmente gera
+     * em memória,
+     * retorna {@link ResolvedWeightArtifact} com {@code path == null},
+     * {@code inMemory == true},
+     * {@code sourceCategory == "IN_MEMORY"} e {@code sha256 == "NONE_IN_MEMORY"}
+     * (sem fabricar
+     * caminho ou hash de arquivo inexistente).
+     */
+    public static ResolvedWeightArtifact resolveCanonicalWeightArtifact(
+            int m,
+            int popSize,
+            Path baseDir,
+            String algorithmName,
+            boolean allowInMemoryDispensation) {
+        Path weightsRoot = (baseDir != null)
+                ? baseDir.resolve(DEFAULT_OFFICIAL_WEIGHTS_DIR)
+                : DEFAULT_OFFICIAL_WEIGHTS_DIR;
+        if (baseDir != null) {
+            assertNotProtectedLegacyDirectory(
+                    baseDir,
+                    "Proibido usar diretório legado protegido na resolução canônica de pesos: ");
+        }
+        return resolveCanonicalWeightArtifactFromWeightsRoot(
+                m, popSize, weightsRoot, algorithmName, allowInMemoryDispensation);
+    }
+
+    /**
+     * Resolve o artefato canônico de pesos diretamente a partir do diretório raiz
+     * configurado para
+     * arquivos de pesos (ex.: {@code resources/weightVectorFiles} ou um override
+     * arbitrário em
+     * {@code -Dstudy.weightsDirectory}), sem prefixar
+     * {@code resources/weightVectorFiles} novamente
+     * (T34).
+     */
+    public static ResolvedWeightArtifact resolveCanonicalWeightArtifactFromWeightsRoot(
+            int m,
+            int popSize,
+            Path weightsRootDir,
+            String algorithmName,
+            boolean allowInMemoryDispensation) {
+        Path effectiveWeightsRoot = (weightsRootDir != null)
+                ? weightsRootDir
+                : DEFAULT_OFFICIAL_WEIGHTS_DIR;
+        assertNotProtectedLegacyDirectory(
+                effectiveWeightsRoot,
+                "Proibido usar diretório legado protegido na resolução canônica de pesos: ");
+        boolean useLowZero = isReplaceZeroWeightsEnabled(algorithmName);
+        String normAlg = normalizeAlgorithmToken(algorithmName);
+        boolean algorithmReadsDiskUnconditionally = "GWASFGA".equals(normAlg);
+        if (allowInMemoryDispensation
+                && !useLowZero
+                && !algorithmReadsDiskUnconditionally
+                && isMoeadWeightGeneratedInMemory(m, popSize)) {
+            double[][] inMem = generateJMetalMoead2DInMemoryWeights(popSize);
+            validateSimplexSet(inMem, popSize, m, DEFAULT_TOLERANCE, DEFAULT_TOLERANCE);
+            return new ResolvedWeightArtifact(
+                    m, popSize, null, "NONE_IN_MEMORY", "IN_MEMORY", true, popSize, popSize);
+        }
+        return resolveCanonicalWeightFileFromWeightsRoot(
+                m, popSize, effectiveWeightsRoot, useLowZero);
+    }
+
+    /**
      * Resolve canonicamente o arquivo de vetores de pesos:
      * <ol>
      * <li>Quando {@code useLowZero == false} (padrão):
-     *   <ol type="a">
-     *     <li>Recurso oficial válido em {@code resources/weightVectorFiles/W{m}D_{N}.dat};</li>
-     *     <li>Recurso puramente analítico em {@code resources/weightVectorFiles/weights_gen/W{m}D_{N}.dat}
-     *         (preservando {@code 0.0} exato);</li>
-     *     <li>Geração puramente analítica persistida e validada em {@code weights_gen/W{m}D_{N}.dat}.</li>
-     *   </ol>
+     * <ol type="a">
+     * <li>Recurso oficial válido em
+     * {@code resources/weightVectorFiles/W{m}D_{N}.dat};</li>
+     * <li>Recurso puramente analítico em
+     * {@code resources/weightVectorFiles/weights_gen/W{m}D_{N}.dat}
+     * (preservando {@code 0.0} exato);</li>
+     * <li>Geração puramente analítica persistida e validada em
+     * {@code weights_gen/W{m}D_{N}.dat}.</li>
+     * </ol>
      * </li>
      * <li>Quando {@code useLowZero == true}:
-     *   <ol type="a">
-     *     <li>Variante existente válida em {@code resources/weightVectorFiles/weights_lowzero_gen/W{m}D_{N}.dat};</li>
-     *     <li>Derivação/geração com substituição {@code 0 -> 1e-5} gravada estritamente em
-     *         {@code weights_lowzero_gen/W{m}D_{N}.dat}, sem modificar {@code official} nem {@code weights_gen/}.</li>
-     *   </ol>
+     * <ol type="a">
+     * <li>Variante existente válida em
+     * {@code resources/weightVectorFiles/weights_lowzero_gen/W{m}D_{N}.dat};</li>
+     * <li>Derivação/geração com substituição {@code 0 -> 1e-5} gravada estritamente
+     * em
+     * {@code weights_lowzero_gen/W{m}D_{N}.dat}, sem modificar {@code official} nem
+     * {@code weights_gen/}.</li>
+     * </ol>
      * </li>
      * </ol>
      *
      * @param m          número de objetivos
      * @param popSize    tamanho da população
-     * @param baseDir    diretório raiz base (ou {@code null} para raiz do projeto)
-     * @param useLowZero se {@code true}, resolve/gera exclusivamente na pasta isolada {@code weights_lowzero_gen/}
+     * @param baseDir    diretório raiz base do workspace (ou {@code null} para raiz
+     *                   do projeto)
+     * @param useLowZero se {@code true}, resolve/gera exclusivamente na pasta
+     *                   isolada {@code weights_lowzero_gen/}
      * @return {@link ResolvedWeightArtifact} validado
      */
-
     public static ResolvedWeightArtifact resolveCanonicalWeightFile(
             int m, int popSize, Path baseDir, boolean useLowZero) {
+        if (baseDir != null) {
+            assertNotProtectedLegacyDirectory(
+                    baseDir,
+                    "Proibido usar diretório legado protegido na resolução canônica de pesos: ");
+        }
+        Path officialDir = (baseDir != null)
+                ? baseDir.resolve(DEFAULT_OFFICIAL_WEIGHTS_DIR)
+                : DEFAULT_OFFICIAL_WEIGHTS_DIR;
+        return resolveCanonicalWeightFileFromWeightsRoot(m, popSize, officialDir, useLowZero);
+    }
+
+    private static final java.util.concurrent.ConcurrentHashMap<Path, Object> WEIGHT_GENERATION_LOCKS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static ResolvedWeightArtifact resolveCanonicalWeightFileFromWeightsRoot(
+            int m, int popSize, Path officialDir, boolean useLowZero) {
         if (m < 2) {
             throw new IllegalArgumentException("O número de objetivos m deve ser >= 2, mas foi: " + m);
         }
         if (popSize < 1) {
             throw new IllegalArgumentException("O tamanho da população deve ser >= 1, mas foi: " + popSize);
         }
-
-        Path officialDir;
-        Path genDir;
-        Path lowZeroDir;
-        if (baseDir != null) {
-            if (baseDir.endsWith("weightVectorFiles")) {
-                officialDir = baseDir;
-                genDir = baseDir.resolve("weights_gen");
-                lowZeroDir = baseDir.resolve("weights_lowzero_gen");
-            } else {
-                officialDir = baseDir.resolve(DEFAULT_OFFICIAL_WEIGHTS_DIR);
-                genDir = baseDir.resolve(DEFAULT_GENERATED_WEIGHTS_DIR);
-                lowZeroDir = baseDir.resolve(DEFAULT_LOWZERO_WEIGHTS_DIR);
-            }
-        } else {
-            officialDir = DEFAULT_OFFICIAL_WEIGHTS_DIR;
-            genDir = DEFAULT_GENERATED_WEIGHTS_DIR;
-            lowZeroDir = DEFAULT_LOWZERO_WEIGHTS_DIR;
-        }
+        assertNotProtectedLegacyDirectory(
+                officialDir,
+                "Proibido usar diretório legado protegido na resolução canônica de pesos: ");
+        Path genDir = officialDir.resolve("weights_gen");
+        Path lowZeroDir = officialDir.resolve("weights_lowzero_gen");
         String fileName = String.format("W%dD_%d.dat", m, popSize);
         Path officialFile = officialDir.resolve(fileName);
+        Path lockKey = (useLowZero ? lowZeroDir : genDir)
+                .toAbsolutePath()
+                .normalize()
+                .resolve(fileName);
+        Object pathLock = WEIGHT_GENERATION_LOCKS.computeIfAbsent(lockKey, k -> new Object());
+        synchronized (pathLock) {
+            return resolveCanonicalWeightFileLocked(
+                    m, popSize, officialFile, genDir, lowZeroDir, fileName, useLowZero);
+        }
+    }
+
+    private static ResolvedWeightArtifact resolveCanonicalWeightFileLocked(
+            int m,
+            int popSize,
+            Path officialFile,
+            Path genDir,
+            Path lowZeroDir,
+            String fileName,
+            boolean useLowZero) {
 
         if (useLowZero) {
             Path lowZeroFile = lowZeroDir.resolve(fileName);
@@ -1927,14 +2117,30 @@ public final class ReferenceSetValidator {
                 return new ResolvedWeightArtifact(
                         m, popSize, officialFile, sha256, "OFFICIAL", false, weights.length, weights.length);
             } catch (Exception ignored) {
-                // Candidato oficial inválido: avança na hierarquia
+                // Candidato oficial inválido: se a restauração oficial opt-in estiver ativa,
+                // tenta restaurar abaixo
+            }
+        }
+
+        if (isRestoreOfficialJMetalResourcesEnabled()
+                && tryRestoreOfficialJMetalWeightFile(officialFile, fileName, m, popSize)) {
+            try {
+                double[][] weights = validateMoeadWeightFile(
+                        officialFile, m, popSize, 2e-4, DEFAULT_TOLERANCE);
+                String sha256 = computeSha256Hex(officialFile);
+                return new ResolvedWeightArtifact(
+                        m, popSize, officialFile, sha256, "OFFICIAL", false, weights.length, weights.length);
+            } catch (Exception ignored) {
+                // Se a restauração falhar na validação, prossegue para Prioridade 2
+                // (weights_gen/)
             }
         }
 
         Path genFile = genDir.resolve(fileName);
         if (Files.isRegularFile(genFile)) {
             try {
-                // weights_gen/ exige pureza analítica estrita: soma 1.0 (tol=1e-6) e preservação de zeros exatos
+                // weights_gen/ exige pureza analítica estrita: soma 1.0 (tol=1e-6) e
+                // preservação de zeros exatos
                 double[][] weights = validateMoeadWeightFile(
                         genFile, m, popSize, DEFAULT_TOLERANCE, DEFAULT_TOLERANCE);
                 SetValidationReport report = validateSimplexSet(
@@ -1945,7 +2151,8 @@ public final class ReferenceSetValidator {
                             m, popSize, genFile, sha256, "WEIGHTS_GEN", false, weights.length, weights.length);
                 }
             } catch (Exception ignored) {
-                // Candidato em weights_gen/ contaminado ou inválido: regera em forma puramente analítica
+                // Candidato em weights_gen/ contaminado ou inválido: regera em forma puramente
+                // analítica
             }
         }
 
@@ -1994,6 +2201,12 @@ public final class ReferenceSetValidator {
      */
     private static void assertNotProtectedLegacyDirectory(Path targetPath, String messagePrefix) {
         Path normOut = targetPath.toAbsolutePath().normalize();
+        if (Files.exists(normOut)) {
+            try {
+                normOut = normOut.toRealPath();
+            } catch (IOException ignored) {
+            }
+        }
         Path[] protectedDirs = new Path[] {
                 Path.of("MOEAD_Weights").toAbsolutePath().normalize(),
                 Path.of("pareto_fronts").toAbsolutePath().normalize(),
@@ -2010,6 +2223,139 @@ public final class ReferenceSetValidator {
                 throw new IllegalArgumentException(messagePrefix + targetPath);
             }
         }
+    }
+
+    /**
+     * Exporta um manifesto de artefatos construído diretamente a partir dos objetos
+     * estruturados
+     * {@link ResolvedWeightArtifact} e {@link ResolvedFrontArtifact} efetivamente
+     * resolvidos no
+     * contexto do estudo, distinguindo explicitamente planejamento pré-execução
+     * ({@code stagePrefix = "PREFLIGHT_PLANNED"}) de consumo observado pós-execução
+     * ({@code stagePrefix = "OBSERVED_CONSUMED"} ou {@code "OBSERVED_FAILED"})
+     * (T34).
+     */
+    public static List<ArtifactManifestEntry> exportManifestFromResolvedArtifacts(
+            Path outputCsv,
+            Path baseDir,
+            List<ResolvedWeightArtifact> resolvedWeights,
+            List<ResolvedFrontArtifact> resolvedFronts,
+            String stagePrefix) {
+        Objects.requireNonNull(outputCsv, "outputCsv must not be null");
+        Objects.requireNonNull(resolvedWeights, "resolvedWeights must not be null");
+        Objects.requireNonNull(resolvedFronts, "resolvedFronts must not be null");
+        String stage = (stagePrefix == null || stagePrefix.isBlank()) ? "ACTIVE" : stagePrefix.trim();
+        assertNotProtectedLegacyDirectory(
+                outputCsv, "Proibido gravar manifesto dentro de diretórios protegidos legados: ");
+        Path normOut = outputCsv.toAbsolutePath().normalize();
+        Path normBase = (baseDir != null) ? baseDir.toAbsolutePath().normalize() : null;
+
+        List<ArtifactManifestEntry> entries = new ArrayList<>(resolvedWeights.size() + resolvedFronts.size());
+
+        for (ResolvedWeightArtifact rwa : resolvedWeights) {
+            long sizeBytes = 0L;
+            String relPath;
+            if (rwa.inMemory() || rwa.path() == null) {
+                relPath = "NONE_IN_MEMORY";
+            } else {
+                Path absPath = rwa.path().toAbsolutePath().normalize();
+                try {
+                    if (Files.isRegularFile(absPath)) {
+                        sizeBytes = Files.size(absPath);
+                    }
+                } catch (IOException ignored) {
+                }
+                relPath = (normBase != null && absPath.startsWith(normBase))
+                        ? normBase.relativize(absPath).toString().replace('\\', '/')
+                        : rwa.path().toString().replace('\\', '/');
+            }
+
+            String baseMode;
+            if (rwa.inMemory()) {
+                baseMode = "IN_MEMORY_DISPENSED_NO_FILE";
+            } else if (isMoeadWeightGeneratedInMemory(
+                    rwa.numberOfObjectives(), rwa.populationSize())) {
+                baseMode = "FILE_VALIDATED_PREFLIGHT__JMETAL_MOEAD_IN_MEMORY";
+            } else {
+                baseMode = "DISK_FILE_READ";
+            }
+            String modeWithStage = "ACTIVE".equals(stage) ? baseMode : (stage + ":" + baseMode);
+
+            entries.add(new ArtifactManifestEntry(
+                    "WEIGHT_VECTOR",
+                    String.format("W%dD_%d", rwa.numberOfObjectives(), rwa.populationSize()),
+                    "MOEADD",
+                    rwa.numberOfObjectives(),
+                    rwa.inMemory() ? "IN_MEMORY_POLICY_ENABLED" : "CANONICAL_RESOURCE_PRIORITY",
+                    rwa.sourceCategory(),
+                    relPath,
+                    sizeBytes,
+                    rwa.totalVectors(),
+                    rwa.uniqueVectors(),
+                    rwa.sha256(),
+                    modeWithStage));
+        }
+
+        for (ResolvedFrontArtifact rfa : resolvedFronts) {
+            long sizeBytes = 0L;
+            Path absPath = rfa.path().toAbsolutePath().normalize();
+            try {
+                if (Files.isRegularFile(absPath)) {
+                    sizeBytes = Files.size(absPath);
+                }
+            } catch (IOException ignored) {
+            }
+            String relPath = (normBase != null && absPath.startsWith(normBase))
+                    ? normBase.relativize(absPath).toString().replace('\\', '/')
+                    : rfa.path().toString().replace('\\', '/');
+            String modeWithStage = "ACTIVE".equals(stage)
+                    ? "DISK_FILE_READ"
+                    : (stage + ":DISK_FILE_READ");
+
+            entries.add(new ArtifactManifestEntry(
+                    "REFERENCE_FRONT",
+                    String.format("%s.%dD", rfa.problemName(), rfa.numberOfObjectives()),
+                    rfa.problemName(),
+                    rfa.numberOfObjectives(),
+                    "CANONICAL_RESOURCE_PRIORITY",
+                    rfa.sourceCategory(),
+                    relPath,
+                    sizeBytes,
+                    rfa.totalPoints(),
+                    rfa.uniquePoints(),
+                    rfa.sha256(),
+                    modeWithStage));
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(ArtifactManifestEntry.CSV_HEADER).append(System.lineSeparator());
+        for (ArtifactManifestEntry e : entries) {
+            sb.append(e.toCsvRow()).append(System.lineSeparator());
+        }
+
+        try {
+            if (normOut.getParent() != null) {
+                Files.createDirectories(normOut.getParent());
+            }
+            Path tmp = Files.createTempFile(
+                    normOut.getParent() != null ? normOut.getParent() : Path.of("."),
+                    "tmp-manifest-",
+                    ".csv.tmp");
+            try {
+                Files.writeString(tmp, sb.toString(), StandardCharsets.UTF_8);
+                try {
+                    Files.move(tmp, normOut, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                } catch (IOException atomicEx) {
+                    Files.move(tmp, normOut, StandardCopyOption.REPLACE_EXISTING);
+                }
+            } finally {
+                Files.deleteIfExists(tmp);
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("Falha ao exportar manifesto de artefatos em: " + normOut, e);
+        }
+
+        return entries;
     }
 
     public static List<ArtifactManifestEntry> exportActiveArtifactManifestCsv(Path outputCsv, Path baseDir) {
@@ -2128,5 +2474,218 @@ public final class ReferenceSetValidator {
             }
         }
         return true;
+    }
+
+    /**
+     * Verifica se o fallback opcional de restauração/extração de arquivos oficiais
+     * do jMetal 7.8
+     * está habilitado via {@code -Dstudy.restoreOfficialJMetalResources=true}.
+     * <p>
+     * Por padrão, retorna {@code false}.
+     */
+    public static boolean isRestoreOfficialJMetalResourcesEnabled() {
+        return Boolean.parseBoolean(
+                System.getProperty(RESTORE_OFFICIAL_JMETAL_RESOURCES_PROPERTY, "false"));
+    }
+
+    /**
+     * Retorna a URL base oficial para restauração de recursos da tag
+     * {@code jmetal-7.8} no GitHub
+     * (ou URL local de teste hermético configurada em
+     * {@link #OFFICIAL_JMETAL_RAW_BASE_URL_PROPERTY}),
+     * bloqueando terminantemente qualquer referência a diretórios legados ou à
+     * cópia externa local
+     * modificada {@code experimento/java/jMetal}.
+     */
+    public static String getOfficialJMetalRawBaseUrl() {
+        String configured = System.getProperty(
+                OFFICIAL_JMETAL_RAW_BASE_URL_PROPERTY,
+                DEFAULT_OFFICIAL_JMETAL_GITHUB_RAW_BASE_URL);
+        if (configured == null || configured.isBlank()) {
+            return DEFAULT_OFFICIAL_JMETAL_GITHUB_RAW_BASE_URL;
+        }
+        String trimmed = configured.trim();
+        String normalizedCheck = trimmed.replace('\\', '/').toLowerCase(Locale.ROOT);
+        if (normalizedCheck.contains("experimento/java/jmetal")
+                || normalizedCheck.contains("moead_weights")
+                || normalizedCheck.contains("pareto_fronts")) {
+            throw new IllegalArgumentException(
+                    "Proibido usar a cópia local modificada do jMetal ou pastas legadas protegidas como fonte de restauração oficial: "
+                            + trimmed);
+        }
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
+    }
+
+    /**
+     * Tenta restaurar atomicamente um arquivo oficial de vetores de pesos do jMetal
+     * 7.8
+     * ({@code W{m}D_{N}.dat}) em {@code targetOfficialFile} quando
+     * {@link #isRestoreOfficialJMetalResourcesEnabled()}
+     * está ativo:
+     * <ol>
+     * <li>Verifica primeiro o subdiretório de espelho oficial local
+     * {@code moead/W{m}D_{N}.dat}
+     * (ou {@code resources/weightVectorFiles/moead/W{m}D_{N}.dat}), validando sua
+     * estrutura e,
+     * quando catalogado em {@code docs/moead-weights-manifest.csv}, seu hash
+     * SHA-256 oficial;</li>
+     * <li>Se ausente no espelho local {@code moead/}, extrai da tag oficial
+     * {@code jmetal-7.8} no
+     * GitHub ({@code <baseUrl>/weightVectorFiles/moead/<fileName>}), valida o
+     * conteúdo e
+     * publica atomicamente em {@code targetOfficialFile}.</li>
+     * </ol>
+     * <p>
+     * Nunca lê de {@code MOEAD_Weights/}, {@code pareto_fronts/} ou da cópia
+     * externa modificada do jMetal.
+     */
+    public static boolean tryRestoreOfficialJMetalWeightFile(
+            Path targetOfficialFile, String fileName, int m, int popSize) {
+        if (targetOfficialFile == null || fileName == null || fileName.isBlank()) {
+            return false;
+        }
+        assertNotProtectedLegacyDirectory(
+                targetOfficialFile,
+                "Proibido restaurar arquivo oficial dentro de diretório legado protegido: ");
+
+        String expectedOfficialSha = lookupExpectedOfficialJMetalWeightSha256(fileName);
+        Path parentDir = targetOfficialFile.getParent();
+
+        // 1. Tenta restaurar a partir do subdiretório homônimo oficial moead/ dentro do
+        // diretório de pesos configurado
+        if (parentDir != null) {
+            Path mirrorFile = parentDir.resolve("moead").resolve(fileName);
+            try {
+                if (Files.isRegularFile(mirrorFile)
+                        && !mirrorFile.toAbsolutePath().normalize()
+                                .equals(targetOfficialFile.toAbsolutePath().normalize())) {
+                    validateMoeadWeightFile(mirrorFile, m, popSize, 2e-4, DEFAULT_TOLERANCE);
+                    if (expectedOfficialSha != null) {
+                        if (matchesExpectedSha256CrossPlatform(mirrorFile, expectedOfficialSha)) {
+                            copyFileAtomically(mirrorFile, targetOfficialFile);
+                            return true;
+                        }
+                    } else {
+                        copyFileAtomically(mirrorFile, targetOfficialFile);
+                        return true;
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        // 2. Tenta extrair via HTTP/URI da tag oficial jmetal-7.8 do repositório GitHub
+        // do jMetal
+        String remoteUrl = getOfficialJMetalRawBaseUrl() + "/weightVectorFiles/moead/" + fileName;
+        return tryDownloadAndValidateOfficialResource(
+                remoteUrl,
+                targetOfficialFile,
+                tempCandidate -> {
+                    validateMoeadWeightFile(tempCandidate, m, popSize, 2e-4, DEFAULT_TOLERANCE);
+                    if (expectedOfficialSha != null) {
+                        if (!matchesExpectedSha256CrossPlatform(tempCandidate, expectedOfficialSha)) {
+                            throw new IllegalArgumentException(
+                                    "SHA-256 divergente do manifesto oficial jMetal 7.8 para " + fileName);
+                        }
+                    }
+                });
+    }
+
+    @FunctionalInterface
+    interface OfficialCandidateValidator {
+        void validate(Path tempCandidate) throws Exception;
+    }
+
+    static boolean tryDownloadAndValidateOfficialResource(
+            String remoteUrl,
+            Path targetOfficialFile,
+            OfficialCandidateValidator validator) {
+        Path tempFile = null;
+        try {
+            if (targetOfficialFile.getParent() != null) {
+                Files.createDirectories(targetOfficialFile.getParent());
+            }
+            tempFile = Files.createTempFile(
+                    targetOfficialFile.getParent() != null ? targetOfficialFile.getParent() : Path.of("."),
+                    "tmp-jmetal-restore-",
+                    ".tmp");
+            java.net.URI uri = java.net.URI.create(remoteUrl);
+            java.net.URLConnection conn = uri.toURL().openConnection();
+            conn.setConnectTimeout(5_000);
+            conn.setReadTimeout(10_000);
+            try (var in = conn.getInputStream()) {
+                Files.copy(in, tempFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+            validator.validate(tempFile);
+            try {
+                Files.move(
+                        tempFile,
+                        targetOfficialFile,
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException atomicEx) {
+                Files.move(tempFile, targetOfficialFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        } finally {
+            if (tempFile != null) {
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (IOException ignored) {
+                }
+            }
+        }
+    }
+
+    private static void copyFileAtomically(Path source, Path target) throws IOException {
+        if (target.getParent() != null) {
+            Files.createDirectories(target.getParent());
+        }
+        Path tempFile = Files.createTempFile(
+                target.getParent() != null ? target.getParent() : Path.of("."),
+                "tmp-jmetal-copy-",
+                ".tmp");
+        try {
+            Files.copy(source, tempFile, StandardCopyOption.REPLACE_EXISTING);
+            try {
+                Files.move(
+                        tempFile,
+                        target,
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException atomicEx) {
+                Files.move(tempFile, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    private static String lookupExpectedOfficialJMetalWeightSha256(String fileName) {
+        Path manifest = Path.of("docs", "moead-weights-manifest.csv");
+        if (!Files.isRegularFile(manifest)) {
+            return null;
+        }
+        try {
+            for (String line : Files.readAllLines(manifest, StandardCharsets.UTF_8)) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("sha256,")) {
+                    continue;
+                }
+                String[] parts = trimmed.split(",", -1);
+                if (parts.length >= 6
+                        && parts[1].endsWith("/" + fileName)
+                        && parts[5].startsWith("IDENTICAL_TO_JMETAL")) {
+                    return parts[0].trim();
+                }
+            }
+        } catch (IOException ignored) {
+        }
+        return null;
     }
 }

@@ -1,4 +1,4 @@
-# PROMPT — ORQUESTRAÇÃO MULTIAGENTE DO PROJETO hypeMOEA
+# TASK_COORDINATOR — ORQUESTRAÇÃO MULTIAGENTE DO PROJETO hypeMOEA
 
 ## Papel do coordenador
 
@@ -9,20 +9,19 @@ Atue como Engenheiro de Software Sênior e pesquisador especializado em Java, ar
 Sua responsabilidade é:
 
 - Compreender o estado real do projeto.
-- Organizar a investigação arquitetural.
-- Distribuir tarefas e controlar suas dependências.
+- Distribuir tarefas e controlar dependências.
+- Definir ownership e evitar conflitos de edição.
 - Prevenir alterações concorrentes conflitantes.
 - Exigir evidências técnicas e científicas.
-- Preservar o funcionamento experimental e as alterações do usuário.
+- Preservar o funcionamento experimental.
 - Coordenar a migração das responsabilidades.
-- Verificar os critérios de aceitação.
-- Consolidar o contexto no `HANDLER.md`.
-- Atualizar o `README.md` conforme as alterações efetivamente realizadas.
-- Conduzir a validação final da refatoração.
+- Consolidar o contexto operacional da fase no `HANDLER.md`.
+- Atualizar o `README.md` quando houver alteração efetiva ou quando alterações anteriores não tiverem sido registradas.
+- Verificar critérios de aceitação, testes de validação e documentação antes de concluir tarefas.
 
-O foco operacional atual é o conjunto T25–T31: auditoria de duplicações, definição das fontes de verdade, resolução canônica de artefatos e migração condicionada das responsabilidades do `ArtifactResolver`.
+O foco é a Fase 5: integrar ao pipeline real os componentes já produzidos, corrigir os impedimentos demonstrados e preparar a homologação da primeira campanha de MOEAs isolados.
 
-Não trate as tarefas das fases anteriores como atividades pendentes por padrão.
+Não reinicie fases anteriores. Não repita auditorias concluídas sem evidência ou solicitação nova. Não inicie a campanha experimental completa nem a adaptação das hiper-heurísticas nesta fase.
 
 Quando houver suporte real a subagentes, distribua atividades independentes. Quando esse suporte não estiver disponível, execute sequencialmente, respeitando as mesmas dependências e critérios.
 
@@ -30,31 +29,31 @@ A existência de arquivos Markdown não ativa automaticamente a execução multi
 
 ---
 
-## Documentos de referência e responsabilidades
+## Documentos e responsabilidades
 
-| Documento ou fonte | Função |
+| Documento | Função |
 |---|---|
-| `AGENTS.md` | Regras permanentes e obrigatórias do projeto |
-| `TASK_COORDINATOR.md` | Organização operacional, dependências e controle da execução |
-| `HANDLER.md` | Estado compartilhado, diagnóstico inicial, decisões, evidências e próximas ações |
-| `tasks/taskX.md` | Escopo técnico e critérios de aceitação de cada tarefa |
-| `README.md` | Apresentação, configuração e instruções de utilização |
-| `docs/` | Documentação específica, fundamentação, relatórios e manifestos |
-| Código, testes e artefatos reais | Evidências do comportamento efetivamente implementado |
-| Dissertação e protocolo aprovado | Contexto científico e limites do experimento |
+| `AGENTS.md` | Regras obrigatórias do projeto |
+| `TASK_COORDINATOR.md` | Planejamento, decisões, tarefas, dependências e rastreabilidade da fase atual |
+| `HANDLER.md` | Histórico, estado operacional, evidências e continuidade entre agentes |
+| `tasks/taskX.md` | Especificação técnica e critérios de aceitação de cada tarefa |
+| `README.md` | Documentação técnica e científica definitiva |
+| Código, testes, recursos e logs reais | Evidência do comportamento efetivamente implementado |
 
-Respeite a ordem de prioridade estabelecida no `AGENTS.md`.
+Respeite a ordem de prioridade de ordens estabelecida no `AGENTS.md`.
 
 Este coordenador não autoriza ignorar regras superiores nem transfere ao coordenador decisões que dependam do operador.
 
 Em caso de conflito:
 
-1. Identifique as instruções conflitantes.
+1. Identifique a divergência.
 2. Consulte as tarefas, o código e os registros relacionados.
 3. Suspenda somente a operação afetada.
 4. Apresente ao operador a divergência, suas implicações e uma recomendação.
 5. Registre a decisão no `HANDLER.md`.
 6. Permita a continuidade das atividades independentes.
+
+Não invente arquivos, APIs, resultados, referências ou decisões.
 
 Não utilize documentos históricos como autorização para contrariar uma instrução atual explícita do operador.
 
@@ -64,388 +63,220 @@ Não utilize documentos históricos como autorização para contrariar uma instr
 
 Todos os agentes devem:
 
-1. Ler os documentos obrigatórios antes de trabalhar.
-2. Confirmar sua atribuição e as dependências da tarefa.
-3. Informar os arquivos que pretendem modificar.
-4. Respeitar as reservas de arquivos.
-5. Registrar início, bloqueio, retomada e entrega.
-6. Produzir evidências e resultados verificáveis.
-7. Submeter os entregáveis à validação do coordenador.
+1. Ler `AGENTS.md`, `HANDLER.md`, `README.md`, este coordenador e as tarefas pertinentes.
+2. Confirmar atribuição, dependências e arquivos autorizados.
+3. Registrar início, bloqueio, retomada e entrega.
+4. Produzir evidências e resultados verificáveis.
+5. Submeter entregáveis à validação do coordenador.
 
-Somente o coordenador pode editar:
+Somente o coordenador edita:
 
 - `HANDLER.md`;
 - `README.md`.
 
-Essa exclusividade vale também para execução sequencial.
+Os agentes produzem conteúdo e evidências para documentação, mas não editam diretamente esses arquivos.
 
-Os agentes devem registrar eventos em arquivos temporários exclusivos:
+Cada agente registra eventos em arquivos temporários exclusivos:
 
 ```text
 docs/<ID_tarefa>-<agente>-<evento>.md
 ```
 
-O coordenador consolida os eventos, verifica sua aplicação e somente então exclui os arquivos temporários.
-
-Não exclua eventos que ainda contenham evidências não preservadas no handler, em relatórios ou em `docs/history/`.
-
-O estado `awaiting_validation` deve anteceder `completed_validated`.
+O coordenador consolida os eventos, preserva evidências relevantes e só então remove os arquivos temporários.
 
 O encerramento da participação de um agente não equivale à aprovação da tarefa.
 
 ---
 
-## 1. Leitura e inicialização obrigatórias
+## Estado inicial da Fase 5
 
-Antes de distribuir trabalho:
+A Fase 5 foi planejada em 17/11/2026. Nenhum código, teste Maven/Java, alteração funcional ou documentação técnica definitiva do README foi produzido nesta preparação.
 
-1. Leia integralmente:
-   - `AGENTS.md`;
-   - `HANDLER.md`;
-   - `README.md`;
-   - este coordenador;
-   - todos os arquivos existentes em `tasks/`.
+O HANDLER registra a conclusão das Fases 1–4 e de T25–T31. O relatório de auditoria posterior relata falhas e lacunas de integração que precisam ser reproduzidas e delimitadas; ele não substitui o histórico nem autoriza apagar conclusões anteriores.
 
-2. Consulte os materiais relacionados à refatoração:
-   - `docs/duplicatas_analise-10do11.md`;
-   - `ArtifactResolver.java`;
-   - `ArtifactResolverTest.java`;
-   - enums, records e classes associados;
-   - `ParetoFrontValidator`;
-   - `ReferenceSetValidator`;
-   - `PerformanceProfiler`;
-   - `EvaluationBudgetProblem`;
-   - `ResultFrontContract`;
-   - classes de geração, leitura, escrita, hash e manifesto;
-   - consumidores e testes relacionados.
+T32 e T33 são mencionadas pelo relatório de auditoria. A existência, numeração e escopo das respectivas tarefas devem ser confirmados antes de depender delas.
 
-3. Leia o `pom.xml` e confirme as dependências efetivamente utilizadas.
+As tarefas T32–T36 são propostas para esta fase. Antes de criá-las, confira os arquivos reais de `tasks/` para evitar colisão, duplicação ou sobreposição com T32/T33 e demais tarefas existentes.
 
-4. Consulte relatórios anteriores quando forem pertinentes. Não os trate como prova automática de que o código atual mantém o mesmo comportamento.
+### Materiais de referência
 
-5. Registre arquivos ausentes. Não invente seu conteúdo nem declare concluída uma inspeção que não foi realizada.
+Consulte, quando disponíveis:
 
-6. Verifique o estado local do repositório sem alterar o Git.
+- `AGENTS.md`;
+- `HANDLER.md`;
+- `README.md`;
+- `TASK_COORDINATOR.md`;
+- arquivos de `tasks/`;
+- `WFGStudy.java`;
+- `StaticParams.java`;
+- `relatorio_auditoria-pre_execucao_final.md`;
+- POM, dependências, fontes, testes, scripts, recursos, logs e manifestos reais.
 
-7. Preserve modificações do usuário e trabalhos ainda não integrados.
+Não presuma que todos os arquivos mencionados existem. Registre ausências e limite as conclusões ao material efetivamente verificado.
 
-8. Identifique os recursos reais de delegação do IDE.
+### Ambiente e regras
 
-9. Inicie ou retome T25 conforme o estado registrado e confirmado.
+Confirme Java 21, Maven e jMetal 7.8 no ambiente e no POM.
 
-Não reinicie T1–T24 para começar esta fase.
+Não atualize versões, dependências ou plugins sem autorização explícita.
 
-### 1.1. Verificação do ambiente
+Utilize Git somente para leitura e checagens. Não crie commits, branches, worktrees ou altere histórico.
 
-As referências do projeto são:
+Preserve os diretórios protegidos:
 
-- Java 21.
-- Maven.
-- jMetal 7.8.
+- `MOEAD_Weights/`;
+- `pareto_fronts/`;
+- `pareto_fronts/csv/`;
+- `pareto/`.
 
-Confirme:
+Não modifique, mova, renomeie, reformate ou sobrescreva arquivos históricos.
 
-- Versões instaladas.
-- Versões declaradas no POM.
-- Dependências resolvidas.
-- Source JARs disponíveis.
-- Recursos e arquivos utilizados.
-- Comandos de testes e execução.
+O código ativo não deve ler, buscar, verificar existência ou fazer fallback para `MOEAD_Weights/` ou `pareto_fronts/csv/`. A leitura offline estritamente necessária ao inventário e migração é atividade separada do runtime.
 
-Não atualize versões, plugins ou dependências sem autorização explícita.
-
-Não utilize documentação de outra versão como comprovação da API instalada.
-
-### 1.2. Numeração e estado das tarefas
-
-Antes de distribuir T25–T31:
-
-1. Confira os arquivos reais de `tasks/`.
-2. Verifique a correspondência com o `HANDLER.md`.
-3. Preserve tarefas históricas e concluídas.
-4. Identifique atividades equivalentes já realizadas.
-5. Confira possíveis colisões de numeração.
-6. Registre qualquer remapeamento antes da execução.
-
-Não sobrescreva uma tarefa para fazê-la corresponder à matriz deste documento.
-
-Os estados iniciais apresentados aqui são referências de planejamento. O estado real deve ser obtido no repositório e no handler.
-
-### 1.3. Uso do Git
-
-Utilize Git somente para leituras e checagens permitidas, como:
-
-```bash
-git status
-git diff
-git log
-```
-
-Não execute operações que alterem o repositório ou seu histórico.
-
-Não crie branches, commits ou worktrees como estratégia automática de execução.
-
-Na ausência de isolamento seguro, utilize reservas por arquivo e execução sequencial.
+Não use a cópia externa modificada do jMetal como fonte oficial. Fixe versão, commit e hash da fonte oficial quando necessário.
 
 ---
 
-## 2. Escopo atual e invariantes experimentais
+## Evidências e decisões ativas
 
-### 2.1. Objetivo da fase
+Classifique cada constatação como:
 
-A fase atual deverá:
+- `CONFIRMADA`: evidência direta e suficiente.
+- `PARCIALMENTE CONFIRMADA`: evidência incompleta.
+- `CONTRADITA`: incompatível com evidência disponível.
+- `NÃO VERIFICÁVEL`: sem elementos suficientes.
 
-- Investigar duplicações reais e aparentes.
-- Definir uma fonte de verdade para cada responsabilidade.
-- Corrigir a resolução dos artefatos.
-- Remover acessos operacionais aos caminhos legados.
-- Introduzir retornos estruturados.
-- Permitir injeção explícita de `baseDir`.
-- Migrar a construção e a exportação do manifesto.
-- Migrar consumidores.
-- Excluir o `ArtifactResolver` somente quando elegível.
-- Produzir documentação arquitetural e plano de dívida técnica.
-- Demonstrar a correção por testes e regressões.
+Classifique a afirmação exata, não um módulo inteiro. Código inspecionado demonstra implementação estática, não execução. Resultado relatado permanece atribuído ao relatório até reprodução.
 
-Não refatore apenas para reduzir classes, métodos ou linhas.
+| ID | Constatação | Classificação | Decisão / encaminhamento | Tarefa |
+|---|---|---|---|---|
+| F5-01 | Coordenador anterior mantém planejamento T25–T31; HANDLER registra conclusão; relatório usa títulos diferentes para alguns IDs | CONFIRMADA e RESOLVIDA na T32/A5 | IDs `T01`–`T37` reconciliados; operador confirmou mapeamento `T32 -> T33` e `T33 -> T37` sem criar `task32.md` nem `task33.md` (`A5`) | T32/T33/T37 |
+| F5-02 | `WFGStudy.main()` usa componentes padrão do jMetal e não demonstra chamada direta aos contratos/executor/HV híbrido/estatística/manifesto | CONFIRMADA e RESOLVIDA em T33–T37 | Integrado e provado no entrypoint real via `mvn test` e `mvn exec:java` (`IsolatedJobExecutor`, `EvaluationBudgetProblem`, `ResultFrontContract`, `ObjectiveNormalizationContract`, `ProcessIsolatedHypervolumeExecutor`, `StudyStatisticalAnalyzer`, manifestos pré/pós) | T33–T37 |
+| F5-03 | `study.outputDirectory` é usado como nome do experimento; falha em subdiretórios é relatada | CONFIRMADA em bytecode e RESOLVIDA na T32 | Implementado `WFGStudy.resolveStudyOutputLayout` separando `parentBaseDirectory` e `experimentName` simples; validado em testes e CLI (`WFGStudy/tests/...`) | T32/T37 |
+| F5-04 | Relatório informa 373 testes/7 falhas; HANDLER informa 370/0 | CONFIRMADA (`373` testes / `7` falhas reproduzidas) e RESOLVIDA na T32 | `MoeaddWeightValidationTest` corrigido separando artefatos canônicos ativos, auditoria forense imutável e manifesto SHA-256 oficial; suíte final `mvn clean test` = `394/0` | T32/T37 |
+| F5-05 | `StaticParams` omite DTLZ5/6 em 10/15 objetivos e retorna 1000; README indica 1500/2000 | CONFIRMADA e RESOLVIDA na T33 (`A1`) | Aprovada pelo operador (`A1`) e implementada em `StaticParams.getMaxGenerations`: `{1000, 1000, 1000, 1000, 1500, 2000}` em `m={2,3,5,8,10,15}` | T33 |
+| F5-06 | Construção antecipada de algoritmos e uso de 8 cores podem afetar orçamento e RNG | CONFIRMADA e RESOLVIDA na T33 (`A2`) | Implementada Opção 1 com lote parcial válido nos 6 algoritmos ($B_{\text{target}} = N_{\text{config}} \times G_{\text{config}}$, proibidos objetivos fictícios/herdados, rejeição de $B < N_{\text{alloc}}$) e integração de `IsolatedJobExecutor` | T33 |
+| F5-07 | `resolveReferenceFrontForStudy` usa diretório padrão na resolução e propriedade apenas depois | CONFIRMADA e RESOLVIDA na T34 | Overrides propagados hermeticamente com `baseDir`, conteúdo validado antes da seleção nas Prioridades 1/2 e fronteira corrigida para `m == 2 && 2 <= N <= 300` | T34 |
+| F5-08 | Manifesto desatualizado, reset entre lotes e gerador WFG ausente são relatados | CONFIRMADA e RESOLVIDA em T33/T34 | Preservação entre lotes verificada por SHA-256 (`T33`), geradores analíticos `WFG1–WFG9` implementados na Prioridade 3, fallback opcional de restauração oficial `-Dstudy.restoreOfficialJMetalResources=false` implementado e manifesto efetivo pré/pós-execução exportado (`T34`) | T33/T34 |
+| F5-09 | Relatório descreve duas fórmulas diferentes de sementes | CONFIRMADA inconsistência interna do relatório; RESOLVIDA na T33 | Função canônica única verificada e documentada em `IsolatedJobExecutor.computeDeterministicSeed` (`SHA-256` UTF-8 + `SplitMix64`) | T33 |
+| F5-10 | Relatório descreve defaults 750 para DTLZ5/6; código fornecido retorna 1000 | CONTRADITA pelo código e teste real (`1000` confirmado antes do ajuste `A1`) | Divergência registrada e coberta por `StudyOutputDirectoryAndGenerationsTest` | T32 |
+| F5-11 | Indicadores são construídos diretamente no main; recomendações de r=1.1 e epsilon-PF não são automaticamente adequadas | CONFIRMADA e RESOLVIDA em T35/T37 (`A3`) | `NHV` suspenso temporariamente no perfil ativo; caixa comum $[\mathbf{0}, \tilde{\mathbf{r}}]$ sob `THEORETICAL_PARETO_BOUNDS` com paridade exata entre `PISA`, `WFG` e `MC`; reuso de `MC` e fallback único configurável `-Dstudy.hvFallbackToMcOnAllExactTimeout` (`NA` estrito, nunca `0.0`); `resolveEffectiveRuntimeClassPath()` para `mvn exec:java` | T35/T37 |
+| F5-12 | README descreve R2 e estatística; main não as conecta diretamente | CONFIRMADA e RESOLVIDA em T36/T37 (`A4` + Opção A) | `StudyStatisticalAnalyzer` integrado ao `main()`, validação cruzada ao vivo aprovada contra `R 4.6.2` base (`scripts/kruskal_dunn_holm.R`), `R2ExecutionObserver` passivo opt-in (`0` avaliações extras nos 6 algoritmos) e `README.md` consolidado | T36/T37 |
 
-Não reúna responsabilidades matematicamente distintas em uma classe genérica.
+Hash comprova identidade de bytes, não procedência nem validade matemática. Não declare corrupção apenas porque um arquivo difere de outra variante legítima.
 
-### 2.2. Contexto experimental a preservar
+Não repita validação matemática de todas as frentes sem vínculo com um achado, alteração ou risco de regressão. O gate final reutiliza evidências e executa os testes pertinentes.
 
-| Elemento | Referência do projeto |
-|---|---|
-| Algoritmos principais | NSGA-III, MOEA/DD, FDEA, RVEA, AGE-MOEA e AGE-MOEA-II |
-| Problemas | DTLZ1–DTLZ7 e WFG1–WFG9 |
-| Objetivos | 2, 3, 5, 8, 10 e 15 |
-| Execuções de referência | 30 por configuração |
-| Pipeline | `src/main/java/br/usp/lti/newmoea/study/WFGStudy.java` |
-| Parâmetros | `src/main/java/br/usp/lti/newmoea/study/StaticParams.java` |
-| Indicadores | Conforme contrato aprovado e implementação vigente |
+### Fundamentação e alternativas
 
-As decisões específicas sobre indicadores, NHV, normalização, orçamento e perfis de algoritmos devem ser recuperadas dos resultados aprovados da fase anterior.
+Consulte fontes primárias dos algoritmos, benchmarks e decisões já aprovadas no projeto. Não escolha parâmetros comuns apenas porque aparecem no algoritmo mais recente; justifique comparabilidade sem descaracterizar métodos.
 
-Não utilize uma configuração histórica para desfazer uma decisão posterior validada.
+Para cada decisão afetada, registre:
 
-Esta refatoração não autoriza:
+- Problema e evidência.
+- Alternativas.
+- Fundamentação técnica ou científica.
+- Impacto experimental.
+- Custo computacional.
+- Reprodutibilidade.
+- Risco de regressão.
+- Testes necessários.
+- Decisão ou pendência.
 
-- Alterar a lista de algoritmos.
-- Alterar problemas ou dimensões.
-- Alterar operadores.
-- Alterar sementes.
-- Alterar orçamento.
-- Alterar fórmulas matemáticas.
-- Alterar normalização ou referência do HV.
-- Iniciar a adaptação das hiper-heurísticas.
-- Iniciar a campanha experimental completa.
+Diretrizes:
 
-Qualquer necessidade desse tipo deve ser apresentada separadamente ao operador.
+- Reutilize componentes validados antes de criar novos.
+- Conte avaliações reais, incluindo inicialização e soluções descartadas.
+- Não use exceção arbitrária, objetivos fictícios ou filhos não avaliados para controlar orçamento.
+- Aprove lote parcial válido ou orçamento comum viável quando necessário.
+- Isole o RNG integralmente; sementes distintas não provam independência estatística.
+- Não prometa reprodutibilidade bit-a-bit fora de ambiente, versão e ordem controlados.
+- Use referência comum por problema e número de objetivos.
+- Diferencie limites da PF de limites de todas as soluções viáveis.
+- Não aplique clipping silencioso ou PF diferente por algoritmo.
+- Valide HV exato, aproximado, precisão, IC, seed e política de mistura antes de integrar.
+- Não transforme falha, timeout ou ausência em zero.
+- Defina unidade, independência, empates, direção e multiplicidade antes da análise estatística.
 
-### 2.3. Configurações históricas de referência
+Referências técnicas consultadas nesta preparação:
 
-As tabelas abaixo servem para rastreabilidade e regressão. Não substituem as configurações efetivas aprovadas no código e no protocolo atual.
+- Oracle Java SE 21, `Process`: https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Process.html
+- Oracle Java SE 21, `Future.cancel`: https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/Future.html
+- R `stats::p.adjust`: https://stat.ethz.ch/R-manual/R-devel/library/stats/html/p.adjust.html
 
-#### Populações e pontos de referência
-
-| Objetivos | População de referência | H1 | H2 | Pontos esperados |
-|---:|---:|---:|---:|---:|
-| 2 | 100 | 99 | 0 | 100 |
-| 3 | 91 | 12 | 0 | 91 |
-| 5 | 210 | 6 | 0 | 210 |
-| 8 | 156 | 3 | 2 | 156 |
-| 10 | 275 | 3 | 2 | 275 |
-| 15 | 135 | 2 | 1 | 135 |
-
-Diferencie quantidade de referências, população solicitada, população efetiva e resultado final.
-
-#### Operadores
-
-| Operador | Parâmetro | Referência anterior |
-|---|---|---|
-| SBX | Probabilidade | 1,0 |
-| SBX | Índice de distribuição | 30 |
-| Mutação polinomial | Probabilidade por variável | `1.0 / numberOfVariables` |
-| Mutação polinomial | Índice de distribuição | 20 |
-
-#### Configurações adicionais
-
-- MOEA/DD: variante `MOEADD`, PBI e parâmetros efetivamente utilizados conforme auditoria anterior.
-- RVEA: referências anteriores `alpha = 2.0` e `fr = 0.1`.
-- FDEA e variantes AGE: preservar identidade e comportamento aprovado.
-
-Não imponha equivalência matemática entre os pontos efetivamente usados pelo NSGA-III e um gerador canônico apenas para facilitar a centralização.
-
-### 2.4. Mudança explícita de requisito
-
-A resolução canônica sem fallback legado é uma alteração solicitada pelo operador.
-
-Não a descreva como refatoração interna sem mudança de comportamento.
-
-Diferencie:
-
-- Diferenças esperadas pela nova política de seleção de artefatos.
-- Regressões indevidas nos algoritmos e indicadores.
-- Mudanças científicas que exigem decisão adicional.
-
-A troca do artefato de entrada pode alterar resultados. Registre os hashes e não declare equivalência experimental quando as entradas forem diferentes.
+A documentação R consultada é R-devel. Fixe versão e pacotes locais ao reproduzir.
 
 ---
 
-## 3. Histórico e etapas de liberação
+## Matriz operacional
 
-### 3.1. Preservação das fases anteriores
+| Tarefa | Responsabilidade | Dependências | Estado atual | Responsável |
+|---|---|---|---|---|
+| T32 | Reconciliação, baseline e correções mínimas de configuração/saída | Nenhuma nova | `completed_validated` | `agentA` (validado pelo Coordenador) |
+| T33 | Orçamento, isolamento, sementes e preservação de runs/lotes (incorpora T32) | T32; decisões `A1`, `A2` e `A5` recebidas | `completed_validated` | `agentB` (validado pelo Coordenador) |
+| T34 | Referências, overrides, memória e manifesto efetivo | T32; interface de T33 | `completed_validated` | `agentC` (validado pelo Coordenador) |
+| T35 | Resultado, normalização e HV seguro no pipeline | T32; interfaces T33/T34; decisão `A3` + confirmação do delta com ressalva de fallback generalizado ligar/desligar recebida | `completed_validated` | `agentD` (validado pelo Coordenador) |
+| T36 | Estatística, profiling e documentação integrada | T32 para pesquisa; T33–T35 concluídas; decisão `A4` + Opção A (R 4.6.2 base nativo em `C:\Program Files\R\R-4.6.2\bin\Rscript.exe`) aprovadas | `completed_validated` | `agentE` (validado pelo Coordenador) |
+| T37 | Aceite fim-a-fim e reauditoria reconciliada (incorpora T33) | T32–T36 concluídas; mapeamento `A5` confirmado | `completed_validated` | Coordenador / Revisor |
 
-Preserve o histórico de:
+### Decisões do operador recebidas em 18/11/2026 (`A1`–`A5`)
 
-- T01–T05: investigação e validações iniciais.
-- T06–T11: referências, operadores, hipervolume, pesos e desempenho.
-- T12–T24: auditoria e homologação da infraestrutura experimental.
+1. **`A1` (`DTLZ5`/`DTLZ6` em `StaticParams.getMaxGenerations`):** Aprovada a tabela do `README.md`: `{1000, 1000, 1000, 1000, 1500, 2000}` para $m \in \{2, 3, 5, 8, 10, 15\}$.
+2. **`A2` (Orçamento `B` e lote parcial na `T33`):** Aprovada $B_{\text{target}} = N_{\text{config}}(m) \times G_{\text{config}}(\text{problema}, m)$ incluindo inicialização, mantendo $N_{\text{alloc}}$ interno e avaliando no último lote apenas o saldo permitido, integrando somente soluções efetivamente avaliadas ao `replacement` (proibidos objetivos fictícios/herdados ou avaliações ocultadas; rejeitar $B < N_{\text{alloc}}$; validar os 6 algoritmos inclusive em $B = N_{\text{alloc}}$ e $B = N_{\text{alloc}} + 1$).
+3. **`A3` (Ajuste de escopo na `T35` — suspensão temporária de `NHV` e dupla saída HV exato + Monte Carlo):**
+   - Manter `PISAHypervolume` exato isolado em processo (`ProcessIsolatedHypervolumeExecutor`) com deadline efetivo como referência primária e exportar também `MonteCarloHypervolume` em saída secundária própria em todas as execuções do perfil ativo; reutilizar resultado MC válido existente em caso de timeout do exato, e exigir fallback MC obrigatório mesmo quando apenas o exato for solicitado (nunca converter timeout/falha em zero nem apresentar MC como exato ou `NHV`).
+   - Suspender temporariamente `NHV` no perfil ativo desta fase (não calcular, não exportar, não exigir derivação em $O(1)$ nesta entrega e não incluir nas novas tabelas/análises deste perfil), preservando código reutilizável, testes matemáticos, documentação histórica e resultados anteriores, e registrando eventual reativação como decisão futura sem criar tarefa redundante.
+   - Normalização e ponto de referência comum permanecem regidos pelo contrato científico reconciliado na `T35`.
+   - Encaminhamento para `T36`/`T37`: `T36` consome a série Monte Carlo homogênea e a série exata com estados explícitos de disponibilidade (sem exigir `NHV` e sem misturar métodos silenciosamente); `T37` verifica a suspensão de `NHV` e a integração correta de exato/MC/fallback.
+   - Condição antes de retomar o código de indicadores da `T35`: reconciliar separadamente modo de normalização (`THEORETICAL_PARETO_BOUNDS` vs `HYBRID_ENVELOPE_BOUNDS`), nomes de propriedades e contagem de amostras com os contratos existentes e apresentar ao operador um resumo curto do delta.
+4. **`A4` (`T36` — script R e `R2ExecutionObserver`):** Preservar e adaptar `scripts/kruskal_dunn_holm.R` (mantendo modo fixture e adicionando leitura de dados reais + comparação automática contra Java), inspecionar `WFGStudy/R/` e `WFGStudy/latex/`, manter pós-processamento Java resiliente à ausência de `Rscript` no `PATH`, separar análise por célula de análise global e manter `R2ExecutionObserver` opt-in e desativado por padrão (preservando `R2` final, sem criar Fase 6).
+5. **`A5` (Mapeamento `T32 -> T33` e `T33 -> T37`):** Confirmado pelo operador sem criar `tasks/task32.md` nem `tasks/task33.md`; ausência física desses arquivos não bloqueia mais a execução.
 
-O `HANDLER.md` registra a conclusão das tarefas da fase anterior. Confira a aplicabilidade das evidências quando forem utilizadas nesta refatoração, sem invalidar ou reiniciar o trabalho automaticamente.
+### Reconciliação oficial de identificadores e arquivos em `tasks/` (Executada na T32 — 17/11/2026)
 
-Uma reabertura exige:
+Inventário físico de `tasks/`: existem exatamente **37 arquivos** (`tasks/task1.md`..`tasks/task31.md` e `tasks/task32.md`..`tasks/task37.md`).
+- **`tasks/task32.md` e `tasks/task33.md` NÃO existem fisicamente em `tasks/`**: ambos os identificadores existem apenas como seções internas ("Tarefa Extra `T32`" e "Tarefa Extra `T33`") em `docs/relatorio_auditoria-pre_execucao_final.md`.
+- **Encaminhamento sem duplicação**:
+  - `T32` (preservação de execuções independentes, não-sobrescrita entre lotes e reprodutibilidade determinística): escopo absorvido integralmente pela **`T33`** (`tasks/task33.md`), reutilizando e integrando `IsolatedJobExecutor` (`T15`). Não criar arquivo `task32.md` nem segundo executor.
+  - `T33` (reauditoria Zero-Trust em ordem cronológica reversa pós-correções): escopo reconciliado e absorvido pela **`T37`** (`tasks/task37.md`), que verificará tarefa por tarefa em ordem reversa após o fechamento de `T32`–`T36`, sem criar auditoria paralela.
+- **Reconciliação de títulos divergentes entre `tasks/task*.md` reais e `docs/relatorio_auditoria-pre_execucao_final.md` (`F5-01`)**:
+  - Fase 1 (`tasks/task1.md`–`task5.md`): `T01` (Investigar origem, finalidade e fluxo dos artefatos de referência), `T02` (Validar `reference-calc` e pontos do NSGA-III contra Das & Dennis), `T03` (Validar arquivos de pesos do MOEA/DD e alternativas nativas), `T04` (Validar frentes de Pareto de referência e recursos do jMetal), `T05` (Padronizar parâmetros, NSGA-III, MOEA/DD e hipervolume). *(O relatório resumiu/trocou rótulos entre `T01`–`T05`; prevalecem os arquivos reais em `tasks/`).*
+  - Fase 2 (`tasks/task6.md`–`task11.md`): `T06` (Auditoria de operadores comuns e mutação polinomial), `T07` (Revalidação de NSGA-III/RVEA, persistência opcional e frentes de Pareto), `T08` (Hipervolume, pontos de referência e normalização), `T09` (Instrumentação e avaliação de desempenho), `T10` (Validação final, documentação e consolidação), `T11` (Auditoria completa e sincronização dos pesos do MOEA/DD). *(O relatório trocou descrições de `T06`–`T11`; prevalecem os arquivos reais em `tasks/`).*
+  - Fase 3 (`tasks/task12.md`–`task24.md`): títulos e escopos alinhados (`T12` inventário/versões, `T13` orçamento `B`, `T14` FDEA/legados, `T15` isolamento/RNG, `T16` frentes físicas/DTLZ, `T17` normalização/indicadores/HV, `T18` manifestos/migração, `T19` contrato de resultado, `T20` HV híbrido/timeout/MC, `T21` Kruskal–Wallis/Dunn–Holm, `T22` reauditoria profiler/15D, `T23` integração/preflight, `T24` dossiê metodológico).
+  - Fase 4 (`tasks/task25.md`–`task31.md`): `T25` (Inventário arquitetural e caracterização da resolução atual), `T26` (Investigação das duplicatas e aprovação da arquitetura de destino), `T27` (Plano de mitigação da dívida técnica baseado em evidências), `T28` (Centralização de primitivas matemáticas e validações reutilizáveis), `T29` (Resolução canônica, retornos estruturados, `baseDir` e política 2D em memória), `T30` (Migração dos consumidores e manifesto dos artefatos efetivos), `T31` (Exclusão condicionada do `ArtifactResolver` e validação final). *(O relatório resumiu subtarefas de zero-replacement dentro de `T25`–`T31`; prevalecem os arquivos reais em `tasks/` e o histórico consolidado no `HANDLER.md`, sem recriar `ArtifactResolver`).*
+  - Fase 5 (`tasks/task32.md`–`tasks/task37.md`): arquivos já materializados e verificados sem colisão de IDs.
 
-- Inconsistência demonstrada.
-- Erro reproduzível.
-- Incompatibilidade.
-- Nova evidência.
-- Mudança explícita de requisito.
-- Solicitação do operador.
-
-Registre a decisão anterior, o motivo da revisão e o impacto.
-
-As etapas de liberação anteriores vinculadas a T1–T24 pertencem ao histórico. Elas não constituem o fluxo operacional desta fase.
-
-### 3.2. Etapas de liberação da refatoração arquitetural
-
-#### A0 — Inventário e caracterização
-
-Responsabilidade principal: T25.
-
-Exige:
-
-- Leitura do handler e das tarefas existentes.
-- Verificação de numeração e sobreposições.
-- Identificação das versões.
-- Inventário das classes, métodos e consumidores.
-- Mapeamento dos acessos a artefatos.
-- Caracterização dos caminhos legados.
-- Baseline de testes pertinente.
-- Registro das hipóteses e evidências no `HANDLER.md`.
-
-A0 libera a investigação arquitetural T26 e a elaboração inicial do plano T27.
-
-Nesse caso não libera refatorações de produção.
-
-#### A1 — Arquitetura consolidada e aprovada
-
-Responsabilidade principal: T26.
-
-Exige a produção de:
+Arquivos propostos:
 
 ```text
-docs/resolucao_duplicatas_arquitetura.md
+tasks/task32.md
+tasks/task33.md
+tasks/task34.md
+tasks/task35.md
+tasks/task36.md
+tasks/task37.md
 ```
 
-O documento deverá conter:
+Confira a numeração e o template real antes de materializar os arquivos. Não reutilize identificadores existentes.
 
-- Duplicações comprovadas.
-- Duplicações aparentes.
-- Fontes de verdade.
-- Responsabilidades de destino.
-- Consumidores.
-- Métodos preservados, delegados, descontinuados e removidos.
-- Assinaturas propostas.
-- Retornos estruturados.
-- Propagação de `baseDir`.
-- Fluxos atual e futuro.
-- Migração do manifesto.
-- Plano de testes.
-- Riscos e critérios de exclusão do `ArtifactResolver`.
+T32 e T33 permanecem reservadas ao que o relatório já menciona. Não crie outra auditoria equivalente nem uma tarefa redundante.
 
-A arquitetura deverá ser submetida à aprovação explícita do operador.
+T33 é integração complementar às garantias de T15/T32. Se T32 já cobrir a mesma correção, atribua o item à T32 e mantenha aqui apenas o escopo residual.
 
-O coordenador verifica sua consistência, mas não substitui essa aprovação.
+T33 é a reauditoria reversa pós-correções mencionada no relatório. T37 é o aceite integrado da Fase 5: reutiliza a T33 quando confirmada, consolida as evidências de T32–T36 e decide se o perfil aprovado está apto à autorização humana para campanha. Não criar outra auditoria equivalente nem sobrescrever IDs.
 
-A1 libera as implementações T28–T30 conforme suas dependências.
+Mesmo procedimento para T23, T29, T30 e demais atividades equivalentes: registre o encaminhamento e não execute dois patches.
 
-#### A2 — Implementações e consumidores migrados
-
-Responsabilidades principais: T28, T29 e T30.
-
-Exige:
-
-- Primitivas e validações compartilhadas conforme a arquitetura.
-- Resolução canônica implementada.
-- Retornos estruturados e `baseDir` testados.
-- Consumidores migrados.
-- Manifesto migrado.
-- Política de memória delimitada.
-- Ausência de políticas operacionais paralelas.
-- Testes e evidências aprovados.
-
-A2 não autoriza exclusão prematura de classes ou testes.
-
-A exclusão permanece condicionada à verificação da T31.
-
-#### A3 — Exclusão condicionada e validação final
-
-Responsabilidade principal: T31.
-
-Exige:
-
-- Mapa completo das responsabilidades migradas.
-- Testes substitutos executados.
-- Ausência de dependências executáveis residuais.
-- Exclusão somente dos componentes elegíveis.
-- Ausência de acesso operacional aos diretórios legados.
-- Regressões e suíte final aprovadas.
-- Documentação atualizada.
-- Consolidação do contexto pelo coordenador.
-
-A T27 recebe os resultados finais para atualizar o plano de dívida técnica.
-
-A conclusão de A3 não autoriza iniciar a campanha experimental.
-
-### 3.3. Plano de dívida técnica
-
-A T27 possui duas entregas:
-
-1. Plano inicial após T25, alinhado à arquitetura da T26.
-2. Atualização final com os resultados de T28–T31.
-
-A atualização final da T27 não é pré-condição para iniciar T31.
-
-Não criar dependência circular entre essas tarefas.
-
----
-
-## 4. Matriz de controle da fase atual
-
-| Tarefa | Responsabilidade | Dependências | Estado inicial | Responsável |
-|---|---|---|---|---|
-| T25 | Inventário arquitetural e caracterização da resolução | Histórico e tarefas existentes | `pending` | Atribuir |
-| T26 | Duplicatas e arquitetura de destino | T25 | `pending` | Atribuir |
-| T27 | Plano de mitigação da dívida técnica | T25; alinhamento com T26 | `pending` | Atribuir |
-| T28 | Primitivas matemáticas e validações reutilizáveis | T26 aprovada | `pending` | Atribuir |
-| T29 | Resolução canônica, retornos estruturados, baseDir e memória | T28; arquitetura aprovada | `pending` | Atribuir |
-| T30 | Migração dos consumidores e do manifesto | T29 | `pending` | Atribuir |
-| T31 | Exclusão condicionada e validação final | T28–T30; plano inicial T27 | `pending` | Atribuir |
-
-Confirme os IDs e estados no repositório antes de distribuir trabalho.
-
-Não mantenha a matriz antiga T1–T24 como lista operacional pendente.
-
-### 4.1. Estados das tarefas
+### Estados
 
 | Estado | Significado |
 |---|---|
 | `pending` | Ainda não iniciada |
 | `in_progress` | Em execução |
-| `blocked` | Impedida de prosseguir por condição identificada |
+| `blocked` | Impedida de prosseguir |
 | `awaiting_validation` | Entregáveis apresentados, aguardando verificação |
 | `completed_validated` | Critérios obrigatórios atendidos e evidências verificadas |
-| `completed_insufficient` | Conclusão histórica cuja validação foi identificada como insuficiente |
+| `completed_insufficient` | Conclusão histórica com validação insuficiente |
 | `reopened` | Reaberta com justificativa |
 
 `completed_insufficient` não representa aprovação da tarefa atual. Registre o bloqueio ou a reabertura necessária.
@@ -454,12 +285,12 @@ A retomada deve ser registrada como evento e seguida do estado apropriado.
 
 Não converta estados históricos automaticamente.
 
-### 4.2. Atribuição aos agentes
+### Atribuição
 
-Cada atribuição deverá informar:
+Cada atribuição deve informar:
 
 - Objetivo.
-- Dependências satisfeitas.
+- Dependências.
 - Arquivos autorizados.
 - Arquivos somente para leitura.
 - Entregáveis.
@@ -470,74 +301,48 @@ Cada atribuição deverá informar:
 
 Um agente pode executar várias tarefas sequencialmente.
 
-Não é necessário criar um agente por tarefa.
-
-O arquivo individual da tarefa continua sendo a especificação técnica detalhada. A matriz não substitui seus critérios.
-
 ---
 
-## 5. Ordem de execução, paralelismo e reservas
-
-### 5.1. Fluxo principal
+## Sequência e reservas
 
 ```text
-T25 — Inventário e caracterização
+T32 — Reconciliação e baseline
   |
-  +--> T26 — Arquitetura
+  +--> T33 — Execução, orçamento e preservação
   |       |
-  |       +--> Aprovação explícita do operador
-  |                |
-  |                v
-  |              T28 — Primitivas e validações
-  |                |
-  |                v
-  |              T29 — Resolução canônica e contratos
-  |                |
-  |                v
-  |              T30 — Consumidores e manifesto
-  |                |
-  |                v
-  |              T31 — Exclusão condicionada e validação
+  |       +--> T34 — Referências e manifesto
+  |               |
+  |               +--> T35 — Resultado e HV seguro
+  |                       |
+  |                       +--> T36 — Estatística e documentação
+  |                               |
+  |                               +--> T37 — Aceite fim-a-fim e reauditoria reconciliada
   |
-  +--> T27 — Plano inicial de dívida técnica
-             |
-             +--> Alinhamento com T26
-             |
-             +--> Atualização final após os resultados de T31
+  +--> T33/T34/T35/T36 — investigações independentes em arquivos próprios
 ```
 
-### 5.2. Paralelismo permitido
+- T32 estabelece o baseline antes dos patches dependentes.
+- T33 estabiliza contrato de job/run/IO.
+- T34 entrega resolução e manifesto.
+- T35 integra métricas com esses contratos.
+- T36 consome dados validados.
+- T37 executa o aceite fim-a-fim após T32–T36 e a reconciliação da T33.
 
-- T26 e T27 podem trabalhar em documentos distintos.
-- Testes independentes podem ser preparados em paralelo.
-- Investigações sem alteração de arquivos compartilhados podem ocorrer em paralelo.
-- Implementações somente podem ocorrer após A1.
-- T28–T30 exigem coordenação das classes compartilhadas.
-- A integração e a exclusão final devem ser controladas.
+O gate final reutiliza T33 se sua especificação for confirmada e coerente. Se ausente ou incompatível, registre bloqueio e encaminhamento ao operador.
 
-Sem suporte seguro a subagentes, execute sequencialmente.
-
-### 5.3. Conflitos principais
-
-| Arquivo ou responsabilidade | Controle |
-|---|---|
-| `ParetoFrontValidator` | Coordenar alterações entre T28, T29 e T30 |
-| `ReferenceSetValidator` | Coordenar matemática, resolução de pesos e manifesto |
-| `WFGStudy` | Reservar durante T29 e T30 |
-| `PerformanceProfiler` | Migrar para os contratos aprovados na T30 |
-| `EvaluationBudgetProblem` | Não introduzir resolução no caminho de cada avaliação |
-| Documento arquitetural | T26 produz; demais tarefas atualizam sob reserva |
-| Plano de dívida técnica | T27 mantém |
-| HANDLER e README | Somente coordenador |
-
-### 5.4. Reserva de arquivos
-
-Mantenha no contexto compartilhado:
+Reserve arquivos exatos, não diretórios amplos sem necessidade.
 
 | Arquivo | Tarefa | Responsável | Situação | Próxima ação |
 |---|---|---|---|---|
-
-Reserve arquivos exatos, não diretórios amplos sem necessidade.
+| `src/main/java/br/usp/lti/newmoea/util/ParetoFrontValidator.java` | T34 | `agentC` | `released` (`completed_validated`) | Manter na suíte de regressão |
+| `src/main/java/br/usp/lti/newmoea/util/ReferenceSetValidator.java` | T34 | `agentC` | `released` (`completed_validated`) | Manter na suíte de regressão |
+| `src/main/java/br/usp/lti/newmoea/study/WFGStudy.java` | T32–T37 | Coordenador / `agentA..E` | `released` (`completed_validated`) | Manter na suíte de regressão |
+| `src/main/java/br/usp/lti/newmoea/util/PerformanceProfiler.java` | T34/T36 | `agentC` / `agentE` | `released` (`completed_validated`) | Manter na suíte de regressão |
+| `src/main/java/br/usp/lti/newmoea/study/StaticParams.java` | T33 | `agentB` | `released` (`completed_validated`) | Manter na suíte de regressão |
+| `src/main/java/br/usp/lti/newmoea/util/EvaluationBudgetProblem.java` | T33/T36 | `agentB` / `agentE` | `released` (`completed_validated`) | Manter na suíte de regressão |
+| `src/main/java/br/usp/lti/newmoea/util/IsolatedJobExecutor.java` | T33/T36/T37 | `agentB` / `agentE` / Coordenador | `released` (`completed_validated`) | Manter na suíte de regressão |
+| `src/main/java/br/usp/lti/newmoea/util/ProcessIsolatedHypervolumeExecutor.java` | T35/T37 | `agentD` / Coordenador | `released` (`completed_validated`) | Manter na suíte de regressão |
+| `src/main/java/br/usp/lti/newmoea/statistics/StudyStatisticalAnalyzer.java` | T36 | `agentE` | `released` (`completed_validated`) | Manter na suíte de regressão |
 
 Uma reserva aparentemente abandonada não autoriza sobrescrita.
 
@@ -551,598 +356,76 @@ Antes de transferi-la:
 
 ---
 
-## 6. HANDLER, eventos e continuidade
+## Testes, documentação e aceite
 
-### 6.1. Conteúdo compartilhado
+A reprodução do baseline pode ter falhas; o aceite final exige suíte integral sem excluir `MoeaddWeightValidationTest` ou remover asserções para obter verde.
 
-O `HANDLER.md` deverá concentrar:
+Registre comandos, versões, hashes, logs, contagens reais e limitações.
 
-- Objetivo vigente.
-- Diagnóstico arquitetural inicial.
-- Hipóteses e evidências confirmadas.
-- Matriz de dependências.
-- Estados das tarefas.
-- Responsáveis e reservas.
-- Decisões.
-- Plano inicial de mitigação.
-- Bloqueios.
-- Situação dos documentos técnicos.
-- Próxima ação.
+Não use contagens históricas como metas.
 
-Não crie outro arquivo para substituir o diagnóstico inicial ou a matriz desta fase.
+Smokes somente temporários ou em `WFGStudy/tests/`, com orçamento e deadline seguros.
 
-Os documentos específicos da T26 e T27 aprofundam a análise; não substituem o resumo operacional do handler.
+`-Druns=1` não garante custo reduzido.
 
-### 6.2. Registros dos agentes
+Inclua testes de:
 
-Cada evento deve informar:
+- Lote A seguido de B.
+- Rerun idempotente.
+- Crash entre arquivos.
+- FUN/VAR inválidos.
+- Protocolo incompatível.
+- Hash alterado.
+- Repetição por runId e ordem.
+- Trinta jobs baratos.
+- HV de geometria conhecida em m15 sob limite.
+- Ausência de acesso operacional legado.
 
-- Tarefa.
-- Agente.
-- Data e hora reais.
-- Estado.
-- Atividades.
-- Arquivos envolvidos.
-- Evidências.
-- Testes e resultados.
-- Decisões propostas.
-- Bloqueios.
-- Próxima ação.
+Preserve resultados brutos e rastrear derivados/índices FUN–VAR.
 
-Registre os eventos imediatamente após sua ocorrência.
+Falha, timeout ou ausência não vira zero.
 
-Não declare testes executados antes de realizá-los.
+O README é o destino principal da documentação definitiva. Não crie `docs/scientific-rationale.md` nem relatório separado de planejamento.
 
-### 6.3. Consolidação pelo coordenador
+Para cada método/função relevante, documente:
 
-O coordenador deverá:
+- Assinatura real.
+- Finalidade.
+- Entradas e tipos.
+- Saídas.
+- Pré/pós-condições.
+- Efeitos colaterais.
+- Dependências.
+- Exceções.
+- Invariantes.
+- Limitações.
+- Complexidade demonstrável.
 
-1. Ler o evento.
-2. Verificar as evidências pertinentes.
-3. Reservar o handler.
-4. Atualizar o diagnóstico e o estado.
-5. Corrigir dependências e responsabilidades quando necessário.
-6. Preservar decisões e evidências relevantes.
-7. Conferir a atualização.
-8. Excluir o evento temporário somente após a consolidação.
+Explicar também fluxo integrado e parâmetros/hiperparâmetros: default, valor efetivo, domínio, unidade, validação, justificativa, interações, impactos esperados/observados, trade-offs e fonte verificada.
 
-Se houver detalhes extensos, arquive-os em:
+Diferenciar teoria, implementação e observação.
 
-```text
-docs/history/
-```
+Corrigir/complementar seções existentes do README sem duplicar conteúdo correto. Preservar histórico.
 
-Mantenha no handler a referência ao arquivo, hash ou commit existente.
-
-Não crie commits para cumprir essa referência.
-
-### 6.4. Atualização do README
-
-Ao concluir o conjunto, somente o coordenador deverá:
-
-- Atualizar instruções que realmente mudaram.
-- Documentar a nova resolução e suas propriedades.
-- Informar compatibilidade e limitações.
-- Acrescentar alterações ainda não registradas ao histórico.
-- Preservar integralmente o histórico existente.
-
-Utilize o formato exigido pelo projeto:
-
-```text
-## Alterações DD/MM/AAAA - HH:mm
-```
-
-Não registre funcionalidade planejada como concluída.
+Executor entrega conteúdo e mapa método/parâmetro→seção→evidência. Coordenador publica.
 
 ---
 
-## 7. Política de arquivos e resolução de artefatos
-
-### 7.1. Responsabilidade por categoria
-
-| Arquivo ou diretório | Política nesta fase |
-|---|---|
-| `WFGStudy.java` | Fachada e orquestração; alterações T29/T30 sob reserva |
-| `StaticParams.java` | Preservar contratos experimentais; alterar somente se necessário e aprovado |
-| `ParetoFrontValidator.java` | Resolução e validação de PF conforme arquitetura |
-| `ReferenceSetValidator.java` | Pesos e primitivas aprovadas, sem concentração indiscriminada |
-| `ResultFrontContract` | Consumir núcleo de dominância aprovado |
-| `EvaluationBudgetProblem` | Preservar contagem; receber configuração pronta |
-| `PerformanceProfiler` | Consumir a resolução canônica |
-| `ArtifactResolver` e teste | Preservar até migração e gate de exclusão |
-| DTOs e manifesto | Proprietário definido na T26 |
-| `resources/` | Recursos identificados e validados |
-| `MOEAD_Weights/` | Proteção física; sem acesso operacional |
-| `pareto_fronts/csv/` | Proteção física; sem acesso operacional |
-| JARs do jMetal | Somente leitura |
-| `src/test/` | Alterações por arquivo e tarefa |
-| Documentos arquiteturais | Produção e atualização durante a execução |
-| `HANDLER.md` e `README.md` | Exclusivos do coordenador |
-
-### 7.2. Ordem canônica obrigatória
-
-A resolução deverá seguir:
-
-1. Recursos oficiais validados em `resources/`.
-2. Recursos gerados e validados nos diretórios correspondentes.
-3. Geração programática adequada, persistida e validada antes do uso.
-
-A seleção deve verificar, conforme o artefato:
-
-- Existência e acessibilidade.
-- Formato.
-- Dimensionalidade.
-- Cardinalidade.
-- Valores finitos.
-- Integridade matemática.
-- Compatibilidade com o algoritmo.
-- Procedência.
-- SHA-256.
-
-Um candidato existente, mas inválido, não prevalece sobre um candidato válido posterior.
-
-Registre a rejeição e a origem efetivamente selecionada.
-
-Não sobrescreva silenciosamente arquivos inválidos.
-
-Se não houver candidato válido nem gerador adequado, retorne falha explícita e diagnóstica.
-
-### 7.3. Diretórios legados
-
-O código ativo não poderá:
-
-- Ler.
-- Buscar.
-- Verificar existência.
-- Selecionar.
-- Realizar fallback.
-
-Nos caminhos:
-
-```text
-MOEAD_Weights/
-pareto_fronts/csv/
-```
-
-A proibição inclui:
-
-- Defaults.
-- Constantes utilizadas operacionalmente.
-- Propriedades que reintroduzam esses diretórios.
-- Verificações secundárias.
-- Fallbacks no preflight.
-- Buscas indiretas em utilitários ou consumidores.
-
-Antes da retirada, inventarie e migre os artefatos necessários.
-
-A leitura offline estritamente necessária ao inventário e à migração deve ser identificada e separada do runtime.
-
-Não exclua, mova, reformate ou sobrescreva os arquivos históricos.
-
-Documentação histórica e testes negativos podem mencionar esses nomes sem constituir acesso operacional.
-
-### 7.4. Organização dos recursos
-
-Verifique e consolide a organização existente:
-
-```text
-resources/
-├── referenceFronts/
-│   └── pf_gen/
-├── weightVectorFiles/
-│   └── weights_gen/
-└── referencePoints/
-```
-
-Outros diretórios de derivados somente devem ser utilizados quando já existentes ou justificados.
-
-Não classifique um arquivo como oficial apenas por estar em `resources/`.
-
-Não classifique uma cópia histórica como gerada sem procedência ou transformação identificada.
-
-Não confunda diretório na raiz com recurso automaticamente presente no classpath.
-
-### 7.5. Geração e persistência
-
-Quando a terceira prioridade for necessária:
-
-1. Verifique se existe gerador adequado à configuração.
-2. Respeite limites de custo e tamanho.
-3. Gere o artefato.
-4. Valide seu conteúdo.
-5. Persista no diretório de gerados.
-6. Confirme a integridade do arquivo final.
-7. Disponibilize somente após a validação.
-8. Registre método, parâmetros e procedência.
-
-Evite disponibilizar arquivos parcialmente escritos.
-
-Trate concorrência e capacidades do sistema de arquivos sem presumir atomicidade universal.
-
-Não utilize geração empírica automaticamente para contornar a ausência de uma frente matemática.
-
-Gerar um artefato necessário não autoriza habilitar problemas fora do perfil experimental aprovado.
-
-### 7.6. Artefatos originais e derivados
-
-Preserve originais e identifique derivados com:
-
-- Tipo.
-- Origem.
-- Método.
-- Parâmetros.
-- Localização.
-- Hash.
-- Estado de validação.
-- Consumidor previsto.
-
-Não substitua zeros globalmente.
-
-Diferencie:
-
-- Simplex combinatório.
-- Pontos do NSGA-III.
-- Direções do RVEA.
-- Pesos do MOEA/DD.
-- Pesos do R2.
-- Frentes de Pareto.
-
-### 7.7. Diretórios de resultados
-
-`WFGStudy/` é reservado aos resultados experimentais finais.
-
-Testes, explorações e resultados intermediários devem utilizar diretórios temporários ou:
-
-```text
-WFGStudy/tests/
-```
-
-Não altere resultados existentes sem autorização.
-
----
-
-## 8. Contratos arquiteturais obrigatórios
-
-### 8.1. Fontes de verdade
-
-A T26 deverá definir o proprietário de cada responsabilidade.
-
-Diretrizes:
-
-- PF: contrato central de resolução em `ParetoFrontValidator`.
-- Pesos: localização e validação matemática delegadas à responsabilidade aprovada em `ReferenceSetValidator`.
-- Política opcional de dispensa do arquivo 2D: fachada `WFGStudy.validateMoeadWeightFile`.
-- Dominância: uma regra reutilizável para semânticas equivalentes.
-- Manifesto: responsabilidade em `ParetoFrontValidator` ou `ReferenceSetValidator`, conforme aprovação.
-- WFGStudy: orquestração e adaptação ao experimento, não nova política paralela.
-- Profiler e contador: consumidores dos contratos, não resolvedores independentes.
-
-Evite dependências circulares entre utilitários e o pipeline de estudo.
-
-### 8.2. Separação matemática
-
-Antes de compartilhar código, diferencie:
-
-1. Enumeração combinatória no simplex.
-2. Construção e transformação de referências para algoritmos.
-3. Construção geométrica de PF analítica.
-
-Código semelhante não implica contrato equivalente.
-
-Preserve fórmulas específicas, ordenação relevante, precisão e comportamento dos consumidores.
-
-Não faça uma PF passar a obedecer às restrições de um vetor de pesos, nem o inverso.
-
-### 8.3. Dominância
-
-Defina explicitamente:
-
-- Sentido de otimização.
-- Dominância estrita.
-- Igualdade.
-- Incomparabilidade.
-- Tratamento de restrições, quando aplicável.
-- Dimensionalidade.
-- Valores inválidos.
-- Tolerância.
-
-Prefira recurso nativo adequado quando comprovadamente compatível.
-
-Compartilhar o comparador não exige fundir filtragem, contagem, validação e exportação em um único método.
-
-### 8.4. Retornos estruturados
-
-Os retornos equivalentes a:
-
-- `ResolvedFrontArtifact`;
-- `ResolvedWeightArtifact`;
-
-devem possuir os atributos necessários ao uso real, definidos na arquitetura.
-
-Considere:
-
-- Path efetivo.
-- SHA-256.
-- Categoria de origem.
-- Tipo.
-- Dimensionalidade.
-- Cardinalidade.
-- Estado ou versão da validação.
-- Procedência.
-- Metadados necessários.
-
-Evite redundância e estados ambíguos.
-
-Diferencie arquivo físico de geração em memória.
-
-Não invente path ou SHA de arquivo inexistente.
-
-Se houver hash de uma representação em memória, registre sua serialização e não o apresente como hash de arquivo.
-
-### 8.5. Injeção de baseDir
-
-`WFGStudy` e `ParetoFrontValidator` devem permitir contexto de diretório base explícito no caminho testável.
-
-A inicialização normal pode determinar a base na fronteira de entrada, propagando-a aos consumidores.
-
-Não dependa de:
-
-- Alterar `user.dir`.
-- Varredura por diretórios ancestrais.
-- Estado global mutável entre testes.
-- Diretório de trabalho implicitamente compartilhado.
-
-Utilize diretórios temporários nos testes.
-
-### 8.6. Pesos gerados em memória
-
-Confirme na implementação instalada do jMetal a condição preliminar:
-
-```text
-m = 2 e N <= 300
-```
-
-Não estenda essa condição a outras variantes ou configurações por analogia.
-
-A política de dispensa do arquivo físico deverá pertencer a:
-
-```text
-WFGStudy.validateMoeadWeightFile
-```
-
-Ela deverá:
-
-- Ser configurável.
-- Permanecer desativada por padrão.
-- Ter nome de propriedade compatível com o projeto.
-- Dispensar a exigência de arquivo somente quando explicitamente ativada e quando as condições comprovadas forem satisfeitas.
-- Produzir resultado estruturado válido.
-- Registrar o modo efetivo.
-
-Diferencie a exigência de arquivo no preflight do comportamento interno do framework.
-
-Uma opção desativada não deve ser descrita como capaz de impedir geração nativa se o algoritmo não oferecer esse controle.
-
-Não declare consumo de arquivo quando o backend o ignorar e gerar pesos em memória.
-
-Essa exceção não autoriza novas prioridades de fontes para configurações arbitrárias.
-
-### 8.7. Manifesto
-
-Migre:
-
-- `exportActiveArtifactManifestCsv`.
-- `ArtifactManifestEntry`.
-- Construção e exportação relacionadas.
-
-O proprietário deverá ser definido na T26 entre `ParetoFrontValidator` e `ReferenceSetValidator`.
-
-`WFGStudy` deverá invocar a operação antes da execução dos algoritmos.
-
-O manifesto deverá derivar dos objetos resolvidos, sem nova busca com política própria.
-
-Diferencie:
-
-- Artefato selecionado ou planejado no preflight.
-- Consumo efetivamente observado.
-- Falha ou divergência posterior.
-
-O manifesto não pode apresentar planejamento como observação.
-
-### 8.8. Exclusão do ArtifactResolver
-
-Não exclua a classe antes de demonstrar:
-
-1. Responsabilidades identificadas.
-2. Sucessores aprovados.
-3. Consumidores migrados.
-4. Testes substitutos executados.
-5. Ausência de dependências residuais.
-6. Compilação e testes aprovados.
-7. Documentação atualizada.
-
-Não crie um `ArtifactResolver2` ou equivalente apenas para manter a mesma concentração de responsabilidades.
-
-Enums ainda úteis não devem ser excluídos por associação nominal à classe.
-
----
-
-## 9. Aprovação de mudanças e fundamentação
-
-Para cada decisão relevante, apresente:
-
-1. Problema.
-2. Evidência no código.
-3. Fundamentação técnica ou científica.
-4. Alternativas.
-5. Solução proposta.
-6. Impactos.
-7. Limitações.
-8. Testes.
-
-Utilize a fonte adequada:
-
-- Código e documentação da versão instalada.
-- Literatura de arquitetura e refatoração.
-- Documentação Java e Maven.
-- Literatura matemática pertinente.
-
-Não force citação científica para uma decisão simples de nomenclatura.
-
-Não invente APIs, autores, DOI ou resultados.
-
-A aprovação arquitetural de A1 deve indicar o documento e a versão aprovados.
-
-Não solicite novamente decisões já aprovadas quando a implementação permanecer dentro do escopo.
-
-Solicite nova decisão quando surgir alteração relevante de arquitetura, requisitos ou comportamento científico.
-
-Ausência de resposta não constitui aprovação.
-
----
-
-## 10. Validação, testes e comandos
-
-### 10.1. Verificação inicial
-
-Na raiz correta:
-
-```bash
-java -version
-mvn -v
-mvn dependency:tree
-```
-
-Execute Maven somente após confirmar o projeto e o POM.
-
-Consulte source JARs e bytecode quando necessários.
-
-### 10.2. Baseline e regressões
-
-Antes de alterar o comportamento interno:
-
-- Identifique testes existentes.
-- Registre o baseline.
-- Acrescente caracterização necessária.
-- Diferencie comportamentos preservados de requisitos abolidos.
-
-Não copie a mesma implementação para produzir um oráculo que reproduza seus erros.
-
-### 10.3. Testes obrigatórios conforme aplicabilidade
-
-- Resolução oficial válida.
-- Oficial ausente ou inválido.
-- Gerado válido, ausente ou inválido.
-- Precedência baseada em conteúdo.
-- Ausência de acesso legado.
-- Geração disponível e indisponível.
-- Persistência e validação antes do uso.
-- SHA-256 e alterações de conteúdo.
-- `baseDir` e diretório de trabalho diferente.
-- Retornos estruturados.
-- Artefatos FILE e IN_MEMORY.
-- Manifesto.
-- Dominância.
-- Simplex, direções e PF sem mistura de contratos.
-- Política de memória desativada e ativada.
-- Limites comprovados da geração nativa.
-- Consumidores migrados.
-- Ausência de IO de resolução a cada `evaluate`.
-- Concorrência de geração, quando aplicável.
-
-### 10.4. Compilação e suíte final
-
-Execute conforme a configuração real:
-
-```bash
-mvn clean compile
-mvn clean test
-```
-
-Utilize empacotamento quando o modo de execução ou carregamento de recursos exigir.
-
-Não:
-
-- Ignorar falhas.
-- Remover testes para obter aprovação.
-- Utilizar `skipTests` como validação.
-- Declarar sucesso somente pelo comando iniciado.
-
-Registre comandos, códigos de saída, logs, contagens reais e limitações.
-
-### 10.5. Testes de consumidores
-
-Execute testes reduzidos do pipeline e do profiler com:
-
-- Entradas conhecidas.
-- Sementes registradas.
-- Orçamento controlado.
-- Limite de tempo efetivo.
-- Recursos canônicos.
-- Saídas temporárias ou em `WFGStudy/tests/`.
-
-Uma execução com `-Druns=1` não garante, sozinha, custo pequeno.
-
-Não execute a campanha completa para validar esta refatoração.
-
-### 10.6. Opções existentes
-
-Preserve os padrões aprovados, incluindo, quando existentes:
-
-```text
--DpersistReferencePoints=false
--DpersistReferenceDirections=false
--DgenerateAllReferenceFronts=false
--DgenerateEmpiricalReferenceFronts=false
--DreplaceZeroWeights=false
-```
-
-Não ative variantes ou geração empírica silenciosamente.
-
-Documente a diferença entre:
-
-- Gerar um artefato necessário à resolução.
-- Gerar todos os artefatos.
-- Habilitar problemas adicionais.
-- Persistir referências de algoritmo para auditoria.
-
-Não registre uma propriedade proposta como funcionalidade já existente.
-
-### 10.7. Proteções científicas
-
-Durante a regressão:
-
-- Conte avaliações quando o fluxo alterado puder afetá-las.
-- Preserve sementes e isolamento.
-- Não altere normalização.
-- Não misture HV bruto, normalizado e NHV.
-- Preserve o controle de tempo dos cálculos.
-- Não transforme falha, timeout ou ausência em zero.
-- Não altere filtros ou critérios estatísticos incidentalmente.
-
-Compilação bem-sucedida não comprova correção arquitetural ou científica.
-
----
-
-## 11. Bloqueio e retomada
-
-### 11.1. Condições de bloqueio
+## Bloqueio e retomada
 
 Interrompa a ação afetada quando houver:
 
-- Arquitetura ainda não aprovada.
+- Arquitetura ou ciência não aprovada.
 - API ou comportamento presumido.
-- Duplicação não demonstrada necessária à alteração proposta.
-- Artefato sem validade ou procedência suficiente.
-- Ausência de gerador adequado.
-- Migração incompleta.
-- Dependência residual que impeça exclusão.
-- Divergência entre manifesto e consumo.
+- Orçamento desigual.
+- RNG compartilhado.
+- Perda de dados.
+- PF inválida.
+- MC sem precisão.
 - Teste obrigatório reprovado.
 - Conflito de arquivo.
 - Alteração fora do escopo.
 - Risco aos dados históricos.
-- Necessidade de mudança científica adicional.
 
 Registre causa, evidência, impacto e condição de retomada.
 
@@ -1150,133 +433,29 @@ A falta de paralelismo seguro pode ser resolvida com execução sequencial.
 
 Uma tarefa bloqueada não impede atividades independentes.
 
-### 11.2. Retomada
+Na retomada, consulte HANDLER, decisões, reservas, agentes ativos, arquivos/artefatos e processos ativos. Registre a retomada.
 
-Antes de retomar:
-
-1. Leia o handler.
-2. Consulte os últimos eventos e decisões.
-3. Confira reservas e agentes ativos.
-4. Inspecione o estado local sem modificar o Git.
-5. Verifique arquivos e artefatos.
-6. Confirme a versão aprovada da arquitetura.
-7. Verifique a resolução do bloqueio.
-8. Registre a retomada.
-
-Não repita tarefas concluídas sem motivo.
-
-Não apague alterações para resolver conflitos.
+Não repita tarefas concluídas sem motivo e não apague alterações para resolver conflitos.
 
 ---
 
-## 12. Documentação e entregáveis
+## Critério de encerramento
 
-### 12.1. Documento arquitetural
+A Fase 5 somente poderá ser validada quando:
 
-A T26 deverá produzir na IDE:
-
-```text
-docs/resolucao_duplicatas_arquitetura.md
-```
-
-Conteúdo obrigatório:
-
-- Arquitetura atual.
-- Quatro focos obrigatórios de duplicação.
-- Duplicações adicionais comprovadas.
-- Duplicações aparentes.
-- Fontes de verdade.
-- Consumidores.
-- Métodos preservados.
-- Métodos delegados.
-- Métodos descontinuados.
-- Métodos removidos ou candidatos à remoção.
-- Assinaturas.
-- Retornos estruturados.
-- Fluxos atual e futuro.
-- Plano de migração.
-- Riscos.
-- Testes.
-- Aprovação.
-- Situação efetivamente implementada.
-
-Não preencher o documento antecipadamente com conclusões presumidas.
-
-### 12.2. Plano de dívida técnica
-
-A T27 deverá produzir na IDE:
-
-```text
-docs/plano_mitigacao_divida_tecnica.md
-```
-
-Para cada item:
-
-- Evidência.
-- Origem conhecida ou desconhecida.
-- Classes.
-- Impactos.
-- Prioridade.
-- Risco de manutenção.
-- Risco de regressão.
-- Solução.
-- Alternativas.
-- Dependências.
-- Esforço relativo.
-- Critério de conclusão.
-- Estado e risco residual.
-
-Diferencie dívida comprovada, defeito, mudança de requisito e melhoria futura.
-
-Não transforme melhorias fora do escopo em dependências obrigatórias.
-
-### 12.3. Entrega consolidada
-
-O coordenador deverá apresentar:
-
-1. Estado de T25–T31.
-2. Arquitetura aprovada.
-3. Duplicações confirmadas e refutadas.
-4. Responsabilidade final de cada componente.
-5. Métodos preservados, delegados e removidos.
-6. Consumidores migrados.
-7. Política canônica implementada.
-8. Situação do `ArtifactResolver`.
-9. Testes e resultados reais.
-10. Preservação dos arquivos históricos.
-11. Documentos produzidos e atualizados.
-12. Dívida residual.
-13. Bloqueios.
-14. Próxima ação.
-
-Não crie um diagnóstico ou uma matriz paralelos ao handler apenas para repetir essas informações.
-
----
-
-## 13. Critérios de conclusão da fase
-
-A fase somente poderá ser validada quando:
-
-1. A0, A1, A2 e A3 estiverem atendidos.
-2. A arquitetura estiver baseada na inspeção real e aprovada.
-3. As fontes de verdade estiverem implementadas.
-4. As duplicações removidas forem comprovadas.
-5. Conceitos matemáticos distintos permanecerem separados.
-6. A resolução selecionar recursos por validade.
-7. Não houver acesso operacional aos caminhos legados.
-8. Os artefatos históricos estiverem preservados.
-9. A geração necessária persistir e validar antes do uso.
-10. `baseDir` e retornos estruturados estiverem testados.
-11. O manifesto representar corretamente seleção e consumo.
-12. A política de memória estiver explícita e desativada por padrão.
-13. Os consumidores estiverem migrados.
-14. Os testes substitutos estiverem executados.
-15. A exclusão do `ArtifactResolver` tiver ocorrido somente quando elegível.
-16. A suíte final e as regressões estiverem aprovadas.
-17. O comportamento experimental estiver preservado, exceto pelas mudanças explicitamente aprovadas.
-18. Os documentos arquiteturais e o plano de dívida estiverem atualizados.
-19. O handler e o README refletirem o estado efetivo.
-20. As limitações e pendências estiverem visíveis.
+1. T32–T37 estiverem concluídas ou bloqueadas com justificativa.
+2. A integração estiver demonstrada pelo entrypoint real.
+3. As referências e o orçamento estiverem válidos.
+4. Os resultados e lotes estiverem preservados.
+5. O RNG e as sementes estiverem demonstrados.
+6. O HV estiver protegido por deadline real.
+7. A análise estatística estiver coerente com o desenho.
+8. A documentação estiver atualizada.
+9. O aceite fim-a-fim da T37 estiver concluído.
+10. O gate final estiver reconciliado.
+11. Nenhum acesso operacional legado permanecer.
+12. Nenhum dado histórico estiver alterado.
+13. As limitações e pendências estiverem visíveis.
 
 Se houver dependência residual, bloqueie a exclusão correspondente.
 
@@ -1288,36 +467,17 @@ A conclusão desta fase não equivale à execução ou autorização da campanha
 
 ---
 
-## 14. Prompt de inicialização e retomada
+## Registro consolidado da Reauditoria Zero-Trust Reversa e Homologação (`T37` + `T33` — 18/11/2026)
 
-Atue como coordenador da refatoração arquitetural do hypeMOEA.
+Executada pelo Coordenador sem presumir conclusões prévias, combinando inspeção de código/bytecode, execução integral sem exclusões (`mvn clean test`: **394 testes em 27 classes, 0 falhas, 0 erros, 0 ignorados**), empacotamento (`mvn package -DskipTests`) e smokes reais via CLI (`mvn exec:java`) em `WFGStudy/tests/`:
 
-Leia AGENTS.md, HANDLER.md, README.md, este TASK_COORDINATOR.md e todos os arquivos de tasks/.
-
-Confira a numeração e o estado de T25–T31. Preserve as tarefas anteriores e aproveite suas evidências válidas.
-
-Comece pela T25 ou retome a primeira tarefa pendente cujas dependências estejam satisfeitas.
-
-Inspecione o relatório de duplicatas, as classes, seus consumidores e testes. Não presuma duplicação pela semelhança de nomes.
-
-Distribua T26 e T27 quando os insumos estiverem disponíveis. Os agentes deverão produzir os documentos arquiteturais na IDE.
-
-Não libere refatorações de produção antes da aprovação arquitetural pelo operador.
-
-Depois da aprovação, conduza T28, T29, T30 e T31 conforme as dependências e reservas.
-
-A resolução ativa deverá utilizar recursos oficiais válidos, depois gerados válidos e, por último, geração adequada persistida e validada.
-
-Remova os acessos operacionais aos caminhos legados sem excluir seus arquivos históricos.
-
-Não remova ArtifactResolver, seu teste ou enums antes de migrar responsabilidades, consumidores e testes.
-
-Somente o coordenador edita HANDLER.md e README.md. Consolide os eventos, preserve as evidências e registre bloqueios e decisões.
-
-Utilize Git somente para leitura e checagens.
-
-Se não houver suporte seguro a subagentes, execute sequencialmente.
-
-Ao final, apresente alterações, testes, documentos, pendências e risco residual.
-
-Não inicie automaticamente a campanha experimental completa.
+1. **`T36` $\to$ `T32` (Fase 5, ordem reversa)**:
+   - **`T36` (`CONFIRMADA` e `VALIDADA`)**: `StudyStatisticalAnalyzer` conectado diretamente a `WFGStudy.main()`; paridade ao vivo com `R version 4.6.2 (2026-10-29 ucrt)` em R base nativo (`validated_cells=5`, `validated_pairs=75`, `max_abs_diff_H=3.38e-12`, `max_abs_diff_p_holm=2.07e-6` no smoke CLI; `150` pares validados na suíte); Friedman por blocos separado da análise por célula; `R2ExecutionObserver` passivo (`0` avaliações extras nos 6 algoritmos); resiliência comprovada sem `Rscript`.
+   - **`T35` (`CONFIRMADA` e `VALIDADA`, com patch complementar na `T37`)**: `NHV` suspenso no perfil ativo (`NHV_2D_EXISTS=False`, `NHV_15D_EXISTS=False`); paridade numérica $\le 10^{-12}$ entre `PISA`, `WFG` e `MonteCarloHypervolume` sob `THEORETICAL_PARETO_BOUNDS`; `NA` estrito em timeout/falha (nunca `0.0`); reuso sem recomputação quando `MC` está ativo e fallback único configurável (`-Dstudy.hvFallbackToMcOnAllExactTimeout=true|false`) quando apenas HVs pesados são configurados. *Achado capturado e corrigido na `T37`*: `mvn exec:java` isolava dependências em `URLClassLoader` fora de `java.class.path`; implementado `ProcessIsolatedHypervolumeExecutor.resolveEffectiveRuntimeClassPath()` (também usado em `IsolatedJobExecutor`) e validado no CLI real com `pisa_status=SUCCESS_EXACT` e `-Dstudy.processIsolation=true`.
+   - **`T34` (`CONFIRMADA` e `VALIDADA`)**: Geradores analíticos `WFG1–WFG9` e `DTLZ1–DTLZ7` ativos na Prioridade 3 com validação prévia de conteúdo nas Prioridades 1/2, fallback opcional de restauração oficial do jMetal 7.8 desativado por padrão (`-Dstudy.restoreOfficialJMetalResources=false`, via backup `moead/` ou tag oficial `jmetal-7.8` no GitHub, bloqueando pastas legadas e a cópia externa modificada do jMetal), escrita atômica sob travas por path (`FRONT_GENERATION_LOCKS`, `WEIGHT_GENERATION_LOCKS`), fronteira `m=2, 2<=N<=300` e `artifact-manifest.csv` com estágios pré/pós-execução.
+   - **`T33` + `T32` (`CONFIRMADA` e `VALIDADA`)**: `DTLZ5/6` = `{1000,1000,1000,1000,1500,2000}`; orçamento equitativo $B_{\text{target}}$ sem objetivos fictícios nos 6 algoritmos (`BudgetCompliantMOEADD` incluso); semente determinística `SHA-256` + `SplitMix64` invariante à ordem/paralelismo; retomada em lotes (`runStart=0,runs=2` $\to$ `runStart=2,runs=1`) com `FUN0_HASH_PRESERVED=True` e recusa de sobrescrita cega em diretórios sem `run_manifest.csv`.
+   - **`T32` (`CONFIRMADA` e `VALIDADA`)**: `WFGStudy.resolveStudyOutputLayout` funcional em subdiretórios aninhados e `MoeaddWeightValidationTest` reconciliado sem exclusões.
+2. **`T31` $\to$ `T01` (Fases 4 $\to$ 1, ordem reversa conforme seção `T33`)**:
+   - **`T31`–`T25` (Fase 4)**: `ArtifactResolver` permanece removido sem referências residuais; `0` acessos operacionais a `MOEAD_Weights/` e `pareto_fronts/csv/`; primitivas de dominância centralizadas em `ParetoFrontValidator.dominanceComparison`; `ResolvedFrontArtifact`/`ResolvedWeightArtifact` imutáveis com injeção hermética de `baseDir`.
+   - **`T24`–`T12` (Fase 3)**: Dossiê metodológico preservado; 6 algoritmos canônicos ativos por padrão (`-Dstudy.includeLegacyAlgorithms=false`); profiler Phase 3, `KruskalWallisTest`/`DunnPostHocTest`, `ExactHypervolumeWorker`/`MonteCarloHypervolume` (IC Wilson 95%), `ResultFrontContract` (1:1 `FUN`/`VAR`, não-dominância estrita), `ObjectiveNormalizationContract`, auditoria física/matemática de frentes, `FDEA` 100% determinístico via `JMetalRandom` e `EvaluationBudgetAuditTest` aprovados na suíte integral.
+   - **`T11`–`T01` (Fases 2 e 1)**: `MoeaddWeightValidationTest`, `PerformanceProfilerTest`, `HypervolumeAuditTest`, `RveaReferenceDirectionsValidationTest`, `OperatorAuditTest`, `AlgorithmIntegrationTest`, `QualityIndicatorUnitTest`, `ParetoFrontValidationTest` e `NsgaIIIReferencePointsValidationTest` todos executados e aprovados (`0` falhas), com diretórios protegidos 100% intactos (`MOEAD_Weights`: 43 arquivos; `pareto_fronts`: 484 arquivos; `pareto_fronts/csv`: 160 arquivos; `pareto`: 125 arquivos; `WFGStudy/` histórico inalterado) e `0` referências à cópia externa proibida do jMetal.

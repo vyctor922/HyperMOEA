@@ -55,6 +55,12 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
     private double[] zideal;
     private double[] znadir;
     private double[][] extremePoints;
+    private java.util.function.BiConsumer<Long, List<DoubleSolution>> generationPopulationListener;
+
+    public void setGenerationPopulationListener(
+            java.util.function.BiConsumer<Long, List<DoubleSolution>> listener) {
+        this.generationPopulationListener = listener;
+    }
 
     public FDEA(Problem<DoubleSolution> problem,
                 int populationSize,
@@ -97,6 +103,9 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
         initIdealPoint();
         initNadirPoint();
         initExtremePoints();
+        if (generationPopulationListener != null) {
+            generationPopulationListener.accept((long) evaluations, population);
+        }
 
         int numberOfObjectives = problem.numberOfObjectives();
 
@@ -159,6 +168,9 @@ public class FDEA implements Algorithm<List<DoubleSolution>> {
             }
 
             generations++;
+            if (generationPopulationListener != null) {
+                generationPopulationListener.accept((long) evaluations, population);
+            }
         }
     }
 

@@ -13,150 +13,79 @@ import org.uma.jmetal.qualityindicator.impl.hypervolume.impl.PISAHypervolume;
 public class StaticParams {
 
     public static int getMaxGenerations(int m, String problem) {
-        switch (m) {
-            case 2:
-                switch (problem) {
-                    case "DTLZ1" -> {
-                        return 400; // DTLZ1
-                    }
-                    case "DTLZ2" -> {
-                        return 250; // DTLZ2
-                    }
-                    case "DTLZ3" -> {
-                        return 1000; // DTLZ3
-                    }
-                    case "DTLZ4" -> {
-                        return 600; // DTLZ4
-                    }
-                    case "DTLZ7" -> {
-                        return 1000; // DTLZ7
-                    }
-                    case "WFG1", "WFG2", "WFG3", "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9" -> {
-                        return 250; // WFG 2-obj
-                    }
-                    default -> {
-                        return 1000;
-                    }
-                }
-            case 3:
-                switch (problem) {
-                    case "DTLZ1" -> {
-                        return 400; // DTLZ1
-                    }
-                    case "DTLZ2" -> {
-                        return 250; // DTLZ2
-                    }
-                    case "DTLZ3" -> {
-                        return 1000; // DTLZ3
-                    }
-                    case "DTLZ4" -> {
-                        return 600; // DTLZ4
-                    }
-                    case "DTLZ7" -> {
-                        return 1000; // DTLZ7
-                    }
-                    case "WFG1", "WFG2", "WFG3", "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9" -> {
-                        return 400; // WFG
-                    }
-                    default -> {
-                        return 1000;
-                    }
-                }
-
-            case 5:
-                switch (problem) {
-                    case "DTLZ1" -> {
-                        return 600; // DTLZ1
-                    }
-                    case "DTLZ2" -> {
-                        return 350; // DTLZ2
-                    }
-                    case "DTLZ3" -> {
-                        return 1000; // DTLZ3
-                    }
-                    case "DTLZ4" -> {
-                        return 1000; // DTLZ4
-                    }
-                    case "DTLZ7" -> {
-                        return 1000; // DTLZ7
-                    }
-                    case "WFG1", "WFG2", "WFG3", "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9" -> {
-                        return 750; // WFG
-                    }
-                    default -> {
-                        return 1000;
-                    }
-                }
-            case 8:
-                switch (problem) {
-                    case "DTLZ1" -> {
-                        return 750; // DTLZ1
-                    }
-                    case "DTLZ2" -> {
-                        return 500; // DTLZ2
-                    }
-                    case "DTLZ3" -> {
-                        return 1000; // DTLZ3
-                    }
-                    case "DTLZ4" -> {
-                        return 1250; // DTLZ4
-                    }
-                    case "DTLZ7" -> {
-                        return 1000; // DTLZ7
-                    }
-                    case "WFG1", "WFG2", "WFG3", "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9" -> {
-                        return 1500; // WFG
-                    }
-                    default -> {
-                        return 1000;
-                    }
-                }
-            case 10:
-                switch (problem) {
-                    case "DTLZ1" -> {
-                        return 1000;  // DTLZ1
-                    }
-                    case "DTLZ2" -> {
-                        return 750;   // DTLZ2
-                    }
-                    case "DTLZ3" -> {
-                        return 1500;  // DTLZ3
-                    }
-                    case "DTLZ4" -> {
-                        return 2000;  // DTLZ4
-                    }
-                    case "DTLZ7" -> {
-                        return 1500; // DTLZ7
-                    }
-                    case "WFG1", "WFG2", "WFG3", "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9" -> {
-                        return 2000; // WFG
-                    }
-
-                }
-            case 15:
-                switch (problem) {
-                    case "DTLZ1" -> {
-                        return 1500;  // DTLZ1
-                    }
-                    case "DTLZ2" -> {
-                        return 1000;  // DTLZ2
-                    }
-                    case "DTLZ3" -> {
-                        return 2000;  // DTLZ3
-                    }
-                    case "DTLZ4" -> {
-                        return 3000;  // DTLZ4
-                    }
-                    case "DTLZ7" -> {
-                        return 2000; // DTLZ7
-                    }
-                    case "WFG1", "WFG2", "WFG3", "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9" -> {
-                        return 3000; // WFG
-                    }
-                }
-            default:
-                return 1000;
+        String key = (problem == null) ? "" : problem.trim().toUpperCase();
+        int sepIdx = key.indexOf('_');
+        if (sepIdx > 0) {
+            key = key.substring(0, sepIdx);
         }
+        int dotIdx = key.indexOf('.');
+        if (dotIdx > 0) {
+            key = key.substring(0, dotIdx);
+        }
+
+        return switch (m) {
+            case 2 -> switch (key) {
+                case "DTLZ1" -> 400;
+                case "DTLZ2" -> 250;
+                case "DTLZ3" -> 1000;
+                case "DTLZ4" -> 600;
+                case "DTLZ5", "DTLZ6" -> 1000;
+                case "DTLZ7" -> 1000;
+                case "WFG", "WFG1", "WFG2", "WFG3", "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9" -> 250;
+                default -> 1000;
+            };
+            case 3 -> switch (key) {
+                case "DTLZ1" -> 400;
+                case "DTLZ2" -> 250;
+                case "DTLZ3" -> 1000;
+                case "DTLZ4" -> 600;
+                case "DTLZ5", "DTLZ6" -> 1000;
+                case "DTLZ7" -> 1000;
+                case "WFG", "WFG1", "WFG2", "WFG3", "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9" -> 400;
+                default -> 1000;
+            };
+            case 5 -> switch (key) {
+                case "DTLZ1" -> 600;
+                case "DTLZ2" -> 350;
+                case "DTLZ3" -> 1000;
+                case "DTLZ4" -> 1000;
+                case "DTLZ5", "DTLZ6" -> 1000;
+                case "DTLZ7" -> 1000;
+                case "WFG", "WFG1", "WFG2", "WFG3", "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9" -> 750;
+                default -> 1000;
+            };
+            case 8 -> switch (key) {
+                case "DTLZ1" -> 750;
+                case "DTLZ2" -> 500;
+                case "DTLZ3" -> 1000;
+                case "DTLZ4" -> 1250;
+                case "DTLZ5", "DTLZ6" -> 1000;
+                case "DTLZ7" -> 1000;
+                case "WFG", "WFG1", "WFG2", "WFG3", "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9" -> 1500;
+                default -> 1000;
+            };
+            case 10 -> switch (key) {
+                case "DTLZ1" -> 1000;
+                case "DTLZ2" -> 750;
+                case "DTLZ3" -> 1500;
+                case "DTLZ4" -> 2000;
+                case "DTLZ5", "DTLZ6" -> 1500;
+                case "DTLZ7" -> 1500;
+                case "WFG", "WFG1", "WFG2", "WFG3", "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9" -> 2000;
+                default -> 1000;
+            };
+            case 15 -> switch (key) {
+                case "DTLZ1" -> 1500;
+                case "DTLZ2" -> 1000;
+                case "DTLZ3" -> 2000;
+                case "DTLZ4" -> 3000;
+                case "DTLZ5", "DTLZ6" -> 2000;
+                case "DTLZ7" -> 2000;
+                case "WFG", "WFG1", "WFG2", "WFG3", "WFG4", "WFG5", "WFG6", "WFG7", "WFG8", "WFG9" -> 3000;
+                default -> 1000;
+            };
+            default -> 1000;
+        };
     }
 
     public static int getPopulationSize(int qtdObj) {

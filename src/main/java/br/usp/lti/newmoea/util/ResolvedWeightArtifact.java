@@ -3,8 +3,10 @@ package br.usp.lti.newmoea.util;
 import java.nio.file.Path;
 
 /**
- * Representação imutável e estruturada de um arquivo de vetores de pesos (MOEA/DD)
- * resolvido canonicamente pelo sistema.
+ * Representação imutável e estruturada de um arquivo de vetores de pesos
+ * (MOEA/DD) resolvido canonicamente pelo sistema, permitindo que os dados sejam
+ * compartilhados entre várias threads sem risco de uma thread alterar os dados
+ * que outra está lendo.
  */
 public record ResolvedWeightArtifact(
         int numberOfObjectives,
@@ -30,5 +32,13 @@ public record ResolvedWeightArtifact(
             throw new IllegalArgumentException("sourceCategory não pode ser nula ou vazia");
         }
     }
-}
 
+    /**
+     * Indica se o artefato foi efetivamente dispensado de arquivo físico em disco
+     * pela política
+     * explícita em memória ({@code path == null && usedInMemoryByFramework}).
+     */
+    public boolean inMemory() {
+        return path == null && usedInMemoryByFramework;
+    }
+}

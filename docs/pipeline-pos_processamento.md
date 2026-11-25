@@ -1,194 +1,117 @@
 # Pipeline de Execução e Pós-Processamento Experimental (`hypeMOEA`)
 
-Este documento descreve a arquitetura real do pipeline experimental em [WFGStudy.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/study/WFGStudy.java) sobre **Java 21** e **jMetal 7.8**, cobrindo desde a resolução pré-voo de artefatos canônicos até o cálculo de indicadores de qualidade e o fluxo de pós-processamento estatístico (jMetal LaTeX/R + inferência não-paramétrica para amostras independentes via `Kruskal-Wallis`, `Dunn-Holm` e $\hat{A}_{12}$ de Vargha-Delaney).
-
-> [!IMPORTANT]
-> Para verificar a lista de pendências de integração entre as classes utilitárias das Fases 3/4 e o método `WFGStudy.main()`, bem como o guia passo a passo de execução e o relatório completo de auditoria *Zero-Trust*, consulte [relatorio_auditoria-pre_execucao_final.md](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/docs/relatorio_auditoria-pre_execucao_final.md).
+Este documento descreve a arquitetura integrada e ativa do pipeline experimental em [WFGStudy.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/study/WFGStudy.java) sobre **Java 21 (LTS)** e **jMetal 7.8**, cobrindo desde a validação pré-voo de artefatos canônicos até a execução isolada por orçamento/semente, o cálculo de indicadores com proteção de hipervolume e o pós-processamento estatístico integrado (Java + validação cruzada em R base 4.6.2).
 
 ---
 
 ## 1. Visão Geral da Arquitetura do Experimento (`WFGStudy`)
 
-O estudo experimental compara **6 algoritmos evolutivos multiobjetivo e *many-objective* (MOEAs/MaOEAs)** nas suítes **WFG1–WFG9** e **DTLZ1–DTLZ7** para $m \in \{2, 3, 5, 8, 10, 15\}$ objetivos, com `INDEPENDENT_RUNS = 30` execuções independentes por par `(algoritmo, problema_m)`:
+O estudo experimental compara os **6 MOEAs/MaOEAs principais** nas suítes **WFG1–WFG9** e **DTLZ1–DTLZ7** para $m \in \{2, 3, 5, 8, 10, 15\}$ objetivos, com `INDEPENDENT_RUNS = 30` execuções independentes por par `(algoritmo, problema_m)`:
 
 1. **`NSGAIII`** (`org.uma.jmetal.algorithm.multiobjective.nsgaiii.NSGAIII`)
-2. **`MOEADD`** ([MOEADD.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/algorithm/moeadd/MOEADD.java))
+2. **`MOEADD`** (`EvaluationBudgetProblem.BudgetCompliantMOEADD` sobre `org.uma.jmetal.algorithm.multiobjective.moead.MOEADD`)
 3. **`FDEA`** ([FDEA.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/algorithm/fdea/FDEA.java))
-4. **`RVEA`** ([RVEA.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/algorithm/rvea/RVEA.java))
+4. **`RVEA`** (`org.uma.jmetal.component.algorithm.multiobjective.RVEABuilder`)
 5. **`AGE-MOEA`** (`org.uma.jmetal.algorithm.multiobjective.agemoea.AGEMOEA`)
 6. **`AGE-MOEA-II`** (`org.uma.jmetal.algorithm.multiobjective.agemoeaii.AGEMOEAII`)
 
-> **Nota sobre `HypE`:** Embora o pacote `br.usp.lti.newmoea.algorithm.hype` exista no repositório (contendo implementações localizadas e utilitários), o algoritmo `HypE` encontra-se comentado em `WFGStudy.configureAlgorithmList()` na campanha de linha de base atual.
-
-### Fluxo de Etapas do Pipeline
+### Fluxo Integrado de Etapas em `WFGStudy.main()`
 
 ```mermaid
 flowchart TD
-    A["1. Pré-Voo (Preflight Validation)"] --> B["2. Configuração de Problemas e Algoritmos"]
-    B --> C["3. Execução dos Algoritmos (FUNx.csv / VARx.csv)"]
-    C --> D["4. Filtragem e Normalização de Frentes (Contratos Fase 3)"]
-    D --> E["5. Cálculo dos 5 Indicadores (HV, NHV, IGD, IGD+, R2)"]
-    E --> F["6. Pós-Processamento jMetal (LaTeX, Wilcoxon R, Friedman)"]
-    E --> G["7. Inferência Não-Paramétrica (Kruskal-Wallis + Dunn-Holm + A12)"]
+    A["1. Resolução e Preflight por Validade (ParetoFrontValidator / ReferenceSetValidator)"] --> B["2. Manifesto Pré-Execução (artifact-manifest.csv: PREFLIGHT_PLANNED)"]
+    B --> C["3. Execução Isolada, LPT, Checkpointing e Orçamento (IsolatedJobExecutor + EvaluationBudgetProblem)"]
+    C --> D["4. Extração Canônica Sincronizada FUN/VAR + .raw.csv (ResultFrontContract sem JMetalRandom)"]
+    D --> E["5. Manifesto OBSERVED_CONSUMED + Telemetria (profiling/job_execution_profile.csv) + Liberação de Heap"]
+    E --> F["6. Indicadores Paralelos (-Dstudy.indicatorWorkers): IGD, IGD+, R2 (ThreadLocal) + HV/HV_MC (sem chamar NHV)"]
+    F --> G["7. Inferência Integrada (StudyStatisticalAnalyzer: KW + Dunn-Holm + A12 + Friedman por Blocos)"]
+    G --> H["8. Tabelas LaTeX/R + Validação Cruzada Automática (scripts/kruskal_dunn_holm.R)"]
 ```
 
 ---
 
-## 2. Etapa 1: Validação Pré-Voo e Resolução Canônica de Artefatos
+## 2. Etapa 1: Validação Pré-Voo, Resolução Canônica e Manifesto Efetivo (`T34`)
 
-Antes de instanciar os algoritmos, [WFGStudy.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/study/WFGStudy.java) executa a validação pré-voo através de [ParetoFrontValidator.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/ParetoFrontValidator.java) e [ReferenceSetValidator.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/ReferenceSetValidator.java):
-
-1. **Frentes de Referência (`ParetoFrontValidator.resolveReferenceFrontArtifact`):**
-   - **Prioridade 1 (`CANONICAL_JMETAL`):** `resources/referenceFronts/<PROBLEM>.<m>D.csv` (utilizado para `WFG1`–`WFG9` e `DTLZ1`–`DTLZ7` em $m \in \{2, 3\}$).
-   - **Prioridade 2 (`GENERATED_PF_GEN`):** `pf_gen/<PROBLEM>.<m>D.csv` (utilizado para $m \in \{5, 8, 10, 15\}$).
-   - **Política de Zeros (`-DreplaceZeroFronts=false` por padrão):** As frentes canônicas preservam zeros exatos (`0.0`). Caso `-DreplaceZeroFronts=true` seja ativado, cópias sanitizadas (`0 -> 1e-5`) são gravadas em `target/sanitized_reference_fronts/`.
-2. **Vetores de Pesos do `MOEA/DD` (`ReferenceSetValidator.resolveWeightArtifact`):**
-   - **Diretório Canônico Ativo:** `resources/weightVectorFiles/W<m>D_<N>.dat` (disponível para $m \in \{2, 3, 5, 8, 10\}$).
-   - **Política de Zeros (`-DreplaceZeroWeights=false` por padrão):** Os arquivos canônicos preservam coordenadas `0.0` nas bordas do simplex. Caso `-DreplaceZeroWeights=true`, cópias sanitizadas (`0 -> 1e-5`) são geradas em `target/sanitized_moead_weights/`.
-   - **Caso $m=15$ (`W15D_135.dat`):** O arquivo físico `W15D_135.dat` reside em `MOEAD_Weights/W15D_135.dat` (ou pode ser gerado em memória por `MOEADD.initializeUniformWeight()`).
-
----
-
-## 3. Etapa 2: Execução dos Algoritmos e Geração de Frentes Brutas
-
-Na implementação atual de [WFGStudy.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/study/WFGStudy.java#L225):
-- O componente `new ExecuteAlgorithms<>(experiment).run()` executa os jobs em paralelo (`NUMBER_OF_CORES = 8`).
-- Para cada algoritmo, problema (`<PROBLEM>_<m>`) e `runId` ($0 \dots 29$), são gravados:
-  - `WFGStudy/data/<ALGORITHM>/<PROBLEM>_<m>/FUN<runId>.csv`: valores dos objetivos da população final.
-  - `WFGStudy/data/<ALGORITHM>/<PROBLEM>_<m>/VAR<runId>.csv`: variáveis de decisão da população final.
-
-### Utilitários da Fase 3 Disponíveis para Execução Rigorosa
-Para garantir equidade estrita de orçamento, reprodutibilidade determinística por semente e higienização das frentes de saída:
-- **Orçamento Estrito de Avaliações ([EvaluationBudgetProblem.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/EvaluationBudgetProblem.java)):** Wrapper sobre `DoubleProblem` que contabiliza avaliações de forma thread-safe (`AtomicInteger`) e impede que `NSGA-III` e `AGE-MOEA`/`AGE-MOEA-II` ultrapassem $B = N_{\text{config}} \times G_{\max}$.
-- **Executor Isolado com Sementes Determinísticas ([IsolatedJobExecutor.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/IsolatedJobExecutor.java)):** Executa cada job configurando `JMetalRandom.getInstance().setSeed(baseSeed + runId * 10007L + problemId * 101L)` e instanciando algoritmos sob demanda (*lazy instantiation*).
-- **Filtragem de Dominadas e Duplicatas ([ResultFrontContract.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/ResultFrontContract.java)):** O método `ResultFrontContract.filterAndSanitize(front, 1e-12)` remove pontos com `NaN`/`Infinity`, soluções Pareto-dominadas (frequentes na população bruta de `MOEA/DD` e `RVEA`) e duplicatas com distância $L_\infty \le 10^{-12}$.
+Antes de executar qualquer algoritmo, `WFGStudy.runPreflightValidationAndResolveArtifacts`:
+1. **Resolve frentes de Pareto por validade de conteúdo** ([ParetoFrontValidator.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/ParetoFrontValidator.java)):
+   - **Prioridade 1 (`OFFICIAL`):** `resources/referenceFronts/<PROBLEM>.<m>D.csv` (ou override `-Dstudy.referenceFrontDirectory`). Quando `-Dstudy.restoreOfficialJMetalResources=true` (`false` por padrão), caso o arquivo oficial esteja ausente ou corrompido, tenta restaurá-lo atomicamente da tag oficial `jmetal-7.8` no GitHub (`jMetal/jMetal`) antes de avançar para a Prioridade 2.
+   - **Prioridade 2 (`PF_GEN`):** `resources/referenceFronts/pf_gen/<PROBLEM>.<m>D.csv` (zeros analíticos puros preservados).
+   - **Prioridade 3 (`ANALYTICAL`):** Geração matemática sob demanda para `DTLZ1–DTLZ7` e `WFG1–WFG9` (respeitando as geometrias distintas de Huband et al., 2006), publicada atomicamente com trava por caminho.
+   - Variantes com substituição `0.0 -> 1e-5` ficam isoladas em `pf_lowzero_gen/` apenas quando `-DreplaceZeroFronts` estiver ativa (`false` por padrão).
+2. **Resolve vetores de pesos do `MOEA/DD`** ([ReferenceSetValidator.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/ReferenceSetValidator.java)):
+   - **Prioridade 1 (`OFFICIAL`):** `resources/weightVectorFiles/W<m>D_<N>.dat` (ou override `-Dstudy.weightsDirectory`). Quando `-Dstudy.restoreOfficialJMetalResources=true` (`false` por padrão), caso o arquivo oficial esteja ausente/corrompido, restaura-o atomicamente a partir do espelho local `moead/` ou da tag oficial `jmetal-7.8` no GitHub (`jMetal/jMetal`), validando o SHA-256 contra `docs/moead-weights-manifest.csv`.
+   - **Prioridade 2/3 (`WEIGHTS_GEN`):** `resources/weightVectorFiles/weights_gen/W<m>D_<N>.dat` (geração analítica pura em duas camadas preservando `0.0`, ex.: `W5D_210.dat` e `W15D_135.dat`).
+   - Variantes `0.0 -> 1e-5` ficam isoladas em `weights_lowzero_gen/` apenas quando `-DreplaceZeroWeights` estiver ativa (`false` por padrão).
+   - Política opcional em memória (`-Dstudy.allowMoeadWeightsInMemory=false` por padrão): quando `true`, dispensa arquivo físico apenas para `MOEA/DD` em $m=2, 2 \le N \le 300$, registrando `NONE_IN_MEMORY` sem fabricar caminho fictício.
+   - **Nunca** acessa os diretórios legados protegidos (`MOEAD_Weights/`, `pareto_fronts/`, `pareto/`) nem a cópia externa modificada do jMetal.
+3. **Exporta `<outputDir>/artifact-manifest.csv`** antes da execução (`PREFLIGHT_PLANNED:*`) e atualiza após o término (`OBSERVED_CONSUMED:*` ou `OBSERVED_EXECUTION_FAILED:*`).
 
 ---
 
-## 4. Etapa 3: Cálculo dos Indicadores de Qualidade (`ComputeQualityIndicators`)
+## 3. Etapa 2: Execução Isolada, Checkpointing Incremental, LPT e Orçamento Estrito
 
-O pipeline avalia **5 indicadores de qualidade** sobre as frentes `FUNx.csv` em relação à frente de referência de cada problema/dimensão:
+A execução dos jobs em `WFGStudy.main()` utiliza [IsolatedJobExecutor.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/IsolatedJobExecutor.java), [EvaluationBudgetProblem.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/EvaluationBudgetProblem.java) e [ResultFrontContract.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/ResultFrontContract.java):
 
-| Sigla | Classe no Projeto / jMetal | Tipo | Orientação |
-| :--- | :--- | :--- | :--- |
-| **`HV`** | `org.uma.jmetal.qualityindicator.impl.hypervolume.impl.PISAHypervolume` (ou [ProcessIsolatedHypervolumeExecutor](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/ProcessIsolatedHypervolumeExecutor.java) / [MonteCarloHypervolume](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/MonteCarloHypervolume.java) em $m \ge 10$) | Convergência + Diversidade | **Maximização** ($\uparrow$) |
-| **`NHV`** | `org.uma.jmetal.qualityindicator.impl.NormalizedHypervolume` ($1 - \text{HV}(A)/\text{HV}(PF_{\text{ref}})$) | Convergência + Diversidade | **Minimização** ($\downarrow$) |
-| **`IGD`** | `org.uma.jmetal.qualityindicator.impl.InvertedGenerationalDistance` | Convergência + Cobertura | **Minimização** ($\downarrow$) |
-| **`IGD+`** | `org.uma.jmetal.qualityindicator.impl.InvertedGenerationalDistancePlus` (fracamente Pareto-compatível) | Convergência + Cobertura | **Minimização** ($\downarrow$) |
-| **`R2`** | [R2.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/qualityindicator/R2.java) (utilidade Tchebycheff ponderada) | Convergência + Diversidade | **Minimização** ($\downarrow$) |
-
-### Artefatos Gerados por `ComputeQualityIndicators`
-1. **Arquivos individuais por indicador:** `WFGStudy/data/<ALGORITHM>/<PROBLEM>_<m>/<INDICATOR>` (contendo 1 valor por linha correspondente a cada `FUN<runId>.csv`).
-2. **Melhores e Medianas Frentes:** `BEST_<INDICATOR>_FUN.csv`, `BEST_<INDICATOR>_VAR.csv`, `MEDIAN_<INDICATOR>_FUN.csv` e `MEDIAN_<INDICATOR>_VAR.csv`.
-3. **Arquivo Consolidado Mestre (`WFGStudy/QualityIndicatorSummary.csv`):**
-   Formato CSV com cabeçalho:
-   ```csv
-   Algorithm,Problem,IndicatorName,ExecutionId,IndicatorValue
-   NSGAIII,WFG1_2,HV,0,0.21634666518702558
-   ...
-   ```
-
-### Normalização Analítica e Mitigação de Hipervolume em Alta Dimensão ($m \ge 10$)
-- **Contrato de Normalização Analítica ([ObjectiveNormalizationContract.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/ObjectiveNormalizationContract.java)):**
-  Em vez de depender dos extremos empíricos min-max do arquivo CSV de referência (que em $m=15$ subestimam os limites reais nas bordas), `ObjectiveNormalizationContract.fromStaticParams(problemName, m)` normaliza cada objetivo $f_i$ pelos limites analíticos verdadeiros $[z_i^*, z_i^{\text{nad}}]$ definidos em [StaticParams.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/study/StaticParams.java#L162-L214) ($[0, 2i]$ para WFG; $[0, 0.5]$ para DTLZ1; $[0, 1]$ para DTLZ2–4) e aplica ponto de referência explícito $r = (1.1, \dots, 1.1)^T$ para o Hipervolume.
-- **Execução Isolada de Hipervolume e Monte Carlo ([ProcessIsolatedHypervolumeExecutor.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/ProcessIsolatedHypervolumeExecutor.java) & [MonteCarloHypervolume.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/MonteCarloHypervolume.java)):**
-  Para $m \in \{10, 15\}$, o cálculo exato WFG/PISA HV tem complexidade exponencial ($\mathcal{O}(N^{m/2})$). O executor isolado dispara uma JVM filha com timeout rígido e, caso o cálculo exato exceda o tempo limite ou a memória (`TIMED_OUT_FALLBACK_MC` / `OOM_FALLBACK_MC`), retorna automaticamente a estimativa por amostragem de Monte Carlo determinística ($N_{\text{samples}} = 100.000$, erro padrão $\text{SE} \le 0,0016$).
+- **Orçamento equitativo $B_{\text{target}} = N_{\text{config}}(m) \times G_{\max}(m, \text{problema})$:** Todos os 6 algoritmos (incluindo `NSGA-III` e `AGE-MOEA`/`II`, que alocam $N_{\text{alloc}}$ múltiplo de 4 ou par) avaliam exatamente $B_{\text{target}}$ soluções reais, integrando no último lote apenas os candidatos efetivamente avaliados (sem objetivos copiados/fictícios e rejeitando $B < N_{\text{alloc}}$).
+- **Independência, fila LPT e reconstrução sem RNG:** Cada tupla `(baseSeed, problem, m, algorithm, runId)` recebe uma semente única de 64 bits (`SplitMix64`) aplicada sob `JMETAL_RANDOM_LOCK` (ou em subprocesso JVM dedicado via `-Dstudy.processIsolation=true`, recebendo flags opcionais via `-Dstudy.workerJvmArgs`). Quando `-Dstudy.parallelWorkers > 1` (e salvo `-Dstudy.lptScheduling=false`), `orderJobSpecsLpt` despacha primeiro os jobs mais pesados (`m >= 8`, `AGE-MOEA`/`II`, `FDEA`) sem alterar resultados determinísticos. Na persistência e auditoria pós-execução, `ResultFrontContract.createUnseededSolution` reconstrói `DoubleSolution` sem invocar `JMetalRandom.getInstance()`, eliminando interferência sobre o gerador singleton mesmo sob concorrência.
+- ***Checkpointing* incremental job-a-job e retomada íntegra:** Conforme cada worker conclui no `ExecutorCompletionService`, `FUN<r>.csv`, `VAR<r>.csv` e `.raw.csv` são gravados imediatamente no disco e os arrays `double[][]` são liberados do Heap via `JobExecutionResult.compactRetainingMetadataOnly()` (e `batchReport = null` antes dos indicadores), preservando apenas escalares e hashes para `profiling/job_execution_profile.csv`. Um journal incremental `run_manifest.checkpoint.csv` sofre *flush* por job e consolida `run_manifest.csv` atomicamente a cada `-Dstudy.checkpointInterval` jobs (`25` por padrão) e ao término do lote. Em retomadas pós-queda, `reconcileCheckpointJournalIfPresent` ignora apenas eventual última linha truncada e `verifyExistingRunForResume` mantém verificação física completa de hashes SHA-256 e alinhamento `VAR -> FUN`, disparando `CorruptedRunArtifactException` diante de qualquer corrupção.
+- **Coleta geracional opt-in de $R^2$ (`-Dstudy.enableR2Observer=false` por padrão):** Quando habilitada (`true`), instancia um `R2ExecutionObserver` isolado por run e exporta `data/<ALG>/<PROB>/R2_trace_run<r>.csv` sem acrescentar avaliações da função objetivo.
 
 ---
 
-## 5. Etapa 4: Pós-Processamento Estatístico e Geração de Tabelas
+## 4. Etapa 3: Normalização Teórica, Indicadores Paralelos e Hipervolume Seguro (`T35` / Fase 6)
 
-O pós-processamento divide-se em **dois fluxos complementares**: (A) os componentes nativos do jMetal 7.8 e (B) o protocolo estatístico não-paramétrico para amostras independentes implementado no projeto (`Kruskal-Wallis` + `Dunn-Holm` + $\hat{A}_{12}$ de Vargha-Delaney).
-
-### 5.1. Fluxo A: Componentes Nativos do jMetal 7.8 (`WFGStudy.main()`)
-
-Executados automaticamente ao final de `WFGStudy.main()` (desde que `study.outputDirectory` seja um nome simples sem subcaminhos aninhados):
-
-1. **`GenerateLatexTablesWithStatistics`:**
-   - **Saída:** `WFGStudy/latex/<experimentName>.tex`
-   - **Conteúdo:** Tabelas LaTeX para cada indicador contendo **Média e Desvio Padrão** e **Mediana e Intervalo Interquartil (IQR)**, destacando em cinza escuro (`cellcolor{gray95}`) o melhor algoritmo e em cinza claro (`cellcolor{gray25}`) o segundo melhor por problema.
-   - **Como compilar o PDF:**
-     ```powershell
-     Push-Location "WFGStudy/latex"
-     pdflatex WFGStudy.tex
-     Pop-Location
-     ```
-
-2. **`GenerateWilcoxonTestTablesWithR`:**
-   - **Saída:** Scripts `.R` em `WFGStudy/R/*.Wilcoxon.R`
-   - **Conteúdo:** Testes de soma de postos de Wilcoxon par-a-par com $\alpha = 0,05$, tendo o último algoritmo da lista (`AGE-MOEA-II`) como algoritmo de referência na tabela tabular de símbolos ($\blacktriangle$, $\triangledown$, $-$).
-   - **Como gerar as tabelas `.tex` a partir dos scripts R:**
-     ```powershell
-     Push-Location "WFGStudy/R"
-     Get-ChildItem -Filter "*.Wilcoxon.R" | ForEach-Object { Rscript $_.Name }
-     Pop-Location
-     ```
-
-3. **`GenerateFriedmanTestTables`:**
-   - **Saída:** `WFGStudy/latex/FriedmanTest<INDICATOR>.tex`
-   - **Observação Metodológica (Gate G1 — `T21`):** O teste de Friedman trata cada problema ou *runId* como bloco pareado. Como as 30 execuções de algoritmos populacionais distintos usam sementes independentes sem pareamento natural entre o *run* $k$ do Algoritmo A e o *run* $k$ do Algoritmo B dentro de um mesmo problema, **a inferência primária por instância `(problema, m, indicador)` deve utilizar o protocolo de amostras independentes (Kruskal-Wallis + Dunn-Holm + Vargha-Delaney $\hat{A}_{12}$)** descrito a seguir.
+No estágio atual (pré-execução final antes da integração das hiper-heurísticas):
+- **`NHV` não possui bloqueio em código**, permanecendo inativa nesta fase apenas por **não ser chamada** nas configurações ativas (`-Dstudy.hvMethods=PISA,MC` ou `-Dstudy.hvMethodsByM=<=5:PISA,MC;>=8:MC`). Caso explicitamente incluída, `hvRefUnit` é avaliado uma única vez por problema antes do despacho paralelo e `NHV` é derivada via `ObjectiveNormalizationContract.deriveNormalizedHypervolumeO1`.
+- **Paralelismo seguro por thread:** `computeContractualIndicatorsAndExport` avalia todas as frentes pendentes em `ExecutorCompletionService` (padrão de threads igual a `study.parallelWorkers`), isolando instâncias de `InvertedGenerationalDistance`, `InvertedGenerationalDistancePlus` e `R2` em `ThreadLocal<IndicatorCalculators>` por problema (mitigando a mutação de estado interno em `R2.compute` no jMetal 7.8), com ordenação *heaviest-first* e limpeza explícita no `finally` (`calculators.remove()`). Subprocessos pesados `ExactHypervolumeWorker` (`PISA`/`WFG`/`NHV`) são limitados por semáforos dedicados (`lowDimExactPermits` para $m \le 5$; `highDimExactPermits` limitado por padrão a $\min(\text{workers}, 2)$ para $m \ge 8$) contra explosão de RAM, enquanto a gravação final preserva estritamente a ordem canônica em `QualityIndicatorSummary.csv` e `hv_audit_manifest.csv`.
+- **Normalização comum (`THEORETICAL_PARETO_BOUNDS`):** [ObjectiveNormalizationContract.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/ObjectiveNormalizationContract.java) normaliza objetivos pelos limites analíticos exatos da frente verdadeira ($[0, 2j]$ em `WFG1–9`, $[0, 0.5]$ em `DTLZ1`, $[0, 1]$ em `DTLZ2–6`, $[0, 1]^{m-1} \times [0, 2m]$ em `DTLZ7`), sem clipping silencioso em `IGD`, `IGD+` e `R2`, e avalia o hipervolume na mesma caixa normalizada $[\mathbf{0}, \tilde{\mathbf{r}}]$ ($\tilde{\mathbf{r}} = T(\mathbf{r}_{\text{raw}})$).
+- **Dupla série de Hipervolume e Fallback Generalizado ([ProcessIsolatedHypervolumeExecutor.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/ProcessIsolatedHypervolumeExecutor.java)):**
+  - Configurável via `-Dstudy.hvMethods` (padrão `PISA,MC`), opcionalmente por faixa de objetivos via `-Dstudy.hvMethodsByM` (opt-in desativado por padrão; ex.: `<=5:PISA,MC;>=8:MC`), `-Dperf.hvTimeoutMs=3600000` (60 min), `-Dstudy.hvMcSamples=1000000` ($10^6$ amostras) e `-Dstudy.workerJvmArgs` (flags JVM exclusivas dos workers com validação *fail-fast*).
+  - **`HV` (`PISA`) / `HV_WFG` (`WFG`):** executados em subprocesso JVM isolado ([ExactHypervolumeWorker.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/ExactHypervolumeWorker.java)) sobre a mesma caixa $[\mathbf{0}, \tilde{\mathbf{r}}]$. Em caso de timeout ou falha, o worker e seus descendentes são encerrados forçadamente e o valor exato é gravado como `NA` (**jamais `0.0`**).
+  - **`HV_MC` ([MonteCarloHypervolume.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/util/MonteCarloHypervolume.java)):** série aproximada uniforme calculada com semente determinística (`deriveDeterministicMcSeed` com `SplittableRandom` local), erro padrão e IC de Wilson a 95%. Quando `MC` já integra `study.hvMethods`, eventual timeout do exato **reutiliza o `HV_MC` já calculado sem recomputar**.
+  - **Opção ligar/desligar `-Dstudy.hvFallbackToMcOnAllExactTimeout` (`true` por padrão):** quando `study.hvMethods` contém **apenas** hipervolumes pesados (`PISA`, `WFG` ou `PISA,WFG`, sem `MC`) e **todos** atingem timeout/falha, o fallback `MonteCarloHypervolume` é executado **exatamente 1 vez** (gravando `HV_FALLBACK_MC` + `<outputDir>/hv_fallback_warnings.md` e auditoria completa em `<outputDir>/hv_audit_manifest.csv`). Se configurada como `false`, nenhum fallback MC é disparado e o resultado permanece `NA`.
 
 ---
 
-### 5.2. Fluxo B: Inferência Não-Paramétrica para Amostras Independentes (`Kruskal-Wallis`, `Dunn-Holm` e $\hat{A}_{12}$)
+## 5. Etapa 4: Pós-Processamento Estatístico Integrado e Validação em R (`T36`)
 
-Implementado em Java nas classes [KruskalWallisTest.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/statistics/KruskalWallisTest.java) e [DunnPostHocTest.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/statistics/DunnPostHocTest.java), e validado contra o R em [scripts/kruskal_dunn_holm.R](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/scripts/kruskal_dunn_holm.R):
+Executado automaticamente ao final de `WFGStudy.main()` por [StudyStatisticalAnalyzer.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/statistics/StudyStatisticalAnalyzer.java):
 
-1. **Teste Omnibus de Kruskal-Wallis ($k = 6$ grupos independentes, $n_i = 30$ runs):**
-   - Calcula os postos médios $\bar{R}_i$ no conjunto combinado $N = \sum n_i = 180$ com atribuição de postos médios (*mid-ranks*) para empates.
-   - Aplica correção exata para empates:
-     $$H_{\text{adj}} = \frac{\frac{12}{N(N+1)} \sum_{i=1}^{k} n_i \bar{R}_i^2 - 3(N+1)}{1 - \frac{\sum (t_j^3 - t_j)}{N^3 - N}}$$
-   - Calcula o $p$-valor assintótico pela distribuição $\chi^2_{k-1}$ ($\text{gl} = 5$).
+1. **Inferência por Célula `(problema, m, indicador)` (`statistics/kruskal_wallis_cells.csv` e `statistics/dunn_holm_posthoc_pairs.csv`):**
+   - Aplica [KruskalWallisTest.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/statistics/KruskalWallisTest.java) + [DunnPostHocTest.java](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/src/main/java/br/usp/lti/newmoea/statistics/DunnPostHocTest.java) (com mid-ranks, correção de empates, proteção para $C=0$ e ajuste sequencial de Holm) e orienta $\hat{A}_{12}$ conforme a direção de otimização (`MAXIMIZE` em `HV`/`HV_WFG`/`HV_MC`; `MINIMIZE` em `IGD`/`IGD+`/`R2`).
+   - Classifica explicitamente a disponibilidade de cada célula (`COMPLETE`, `PARTIAL_MISSING_EXACT`, `UNAVAILABLE_ALL_NA`, `INSUFFICIENT_RUNS_FOR_INFERENCE`), sem jamais preencher `NA` do exato com valores de Monte Carlo.
+2. **Comparação Global entre Problemas (`statistics/friedman_global_blocks.csv` e `latex/Phase5StatisticalSummary.tex`):**
+   - Teste de Friedman por blocos (onde cada bloco é a mediana de uma célula completa `problemTag`, evitando pseudo-replicação) com estatística $F_F$ de Iman–Davenport.
+3. **Tabelas Auxiliares jMetal (`latex/<experimentName>.tex`, `latex/FriedmanTest*.tex`, `R/*.R`):**
+   - Geradas automaticamente para todos os indicadores completos sem `NA`, suportando inclusive diretórios de saída aninhados (`WFGStudy/tests/...`) via `WFGStudy.resolveStudyOutputLayout`.
+4. **Validação Cruzada Automática contra R Base ([scripts/kruskal_dunn_holm.R](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/scripts/kruskal_dunn_holm.R)):**
+   - Implementação 100% autocontida em R base nativo (`stats::kruskal.test`, fórmula analítica exata de Dunn com correção de empates e `stats::p.adjust(..., method = "holm")`, sem exigir o pacote externo CRAN `dunn.test`).
+   - `StudyStatisticalAnalyzer` localiza automaticamente `Rscript` via `-Dstudy.rscriptPath`, `PATH` ou instalação padrão (ex.: `C:\Program Files\R\R-4.6.2\bin\Rscript.exe` no Windows ou `/usr/bin/Rscript` no Linux), gerando `statistics/r_vs_java_validation.csv` e `statistics/r_validation_status.txt` (sem falhar caso `Rscript` esteja ausente).
 
-2. **Teste Post-Hoc de Dunn com Correção Step-Down de Holm (FWER $\alpha = 0,05$):**
-   - Acionado quando o teste omnibus rejeita $H_0$ ($p < 0,05$).
-   - Compara todos os $\binom{6}{2} = 15$ pares de algoritmos usando a variância conjunta dos postos com correção de empates:
-     $$z_{A,B} = \frac{\bar{R}_A - \bar{R}_B}{\sqrt{\left(\frac{N(N+1)}{12} - \frac{\sum (t_j^3 - t_j)}{12(N-1)}\right)\left(\frac{1}{n_A} + \frac{1}{n_B}\right)}}$$
-   - Ajusta os 15 $p$-valores bilaterais pelo procedimento *step-down* de Holm ($\tilde{p}_{(m)} = \min(1, \max_{j \le m} (M - j + 1) p_{(j)})$).
+### Comandos Úteis de Pós-Processamento Manual
 
-3. **Tamanho de Efeito Não-Paramétrico $\hat{A}_{12}$ de Vargha-Delaney:**
-   - Mede a probabilidade estocástica de uma execução de $A$ superar uma execução de $B$:
-     $$\hat{A}_{12}(A, B) = \frac{\#(a_i > b_j) + 0.5 \cdot \#(a_i = b_j)}{n_A n_B} \in [0, 1]$$
-   - Classificação automática de magnitude (`Negligible`, `Small`, `Medium`, `Large`) conforme os limiares canônicos de Vargha & Delaney (2000): $|\hat{A}_{12} - 0,5|$ comparado a $\{0,06;\; 0,14;\; 0,21\}$.
+* **No Windows `CMD` (`cmd.exe`)**:
+```bash
+REM 1. Executar o modo fixture de validação do script R
+"C:\Program Files\R\R-4.6.2\bin\Rscript.exe" scripts/kruskal_dunn_holm.R --fixture
 
-#### Como Executar o Pós-Processamento `Kruskal-Wallis` + `Dunn-Holm` + $\hat{A}_{12}$
+REM 2. Executar validação cruzada manual R vs Java sobre um diretório de estudo
+"C:\Program Files\R\R-4.6.2\bin\Rscript.exe" scripts/kruskal_dunn_holm.R ^
+  --summary-csv WFGStudy/QualityIndicatorSummary.csv ^
+  --java-kw-csv WFGStudy/statistics/kruskal_wallis_cells.csv ^
+  --java-dunn-csv WFGStudy/statistics/dunn_holm_posthoc_pairs.csv ^
+  --output-comparison-csv WFGStudy/statistics/r_vs_java_validation.csv
+```
 
-- **Via Testes Unitários / API Java (`KruskalWallisTest` & `DunnPostHocTest`):**
-  ```powershell
-  mvn test "-Dtest=KruskalWallisTestTest"
-  ```
-  Programaticamente, passe um `Map<String, double[]>` com as 30 execuções de cada algoritmo (lidas de `WFGStudy/data/<ALG>/<PROB>_<m>/<IND>` ou `QualityIndicatorSummary.csv`):
-  ```java
-  KruskalWallisTest.Result kw = KruskalWallisTest.evaluate(groups);
-  if (kw.getPValue() < 0.05) {
-      List<DunnPostHocTest.PairwiseComparison> postHoc = DunnPostHocTest.evaluateWithHolm(groups, 0.05);
-  }
-  ```
+* **No `Linux Bash` ou `Git Bash` (Windows)**:
+```bash
+# 1. Executar o modo fixture de validação do script R (se Rscript estiver no PATH; no Git Bash sem PATH, use "/c/Program Files/R/R-4.6.2/bin/Rscript.exe")
+Rscript scripts/kruskal_dunn_holm.R --fixture
 
-- **Via R (`scripts/kruskal_dunn_holm.R`):**
-  Para validar o benchmark estatístico ou processar grupos no R:
-  ```powershell
-  Rscript scripts/kruskal_dunn_holm.R
-  ```
-
----
-
-## 6. Resumo de Comandos de Pós-Processamento Completo
-
-Após a conclusão de todos os lotes da campanha em `WFGStudy/` (e geração de `WFGStudy/QualityIndicatorSummary.csv`):
-
-```powershell
-# 1. Compilar scripts R de Wilcoxon gerados pelo jMetal
-Push-Location "WFGStudy/R"
-Get-ChildItem -Filter "*.Wilcoxon.R" | ForEach-Object { Rscript $_.Name }
-Pop-Location
-
-# 2. Compilar tabelas LaTeX de Média/DP, Mediana/IQR e Friedman
-Push-Location "WFGStudy/latex"
-pdflatex WFGStudy.tex
-Get-ChildItem -Filter "FriedmanTest*.tex" | ForEach-Object { pdflatex $_.Name }
-Pop-Location
-
-# 3. Executar script de inferência não-paramétrica Kruskal-Wallis + Dunn-Holm + A12
-Rscript scripts/kruskal_dunn_holm.R
+# 2. Executar validação cruzada manual R vs Java sobre um diretório de estudo
+Rscript scripts/kruskal_dunn_holm.R \
+  --summary-csv WFGStudy/QualityIndicatorSummary.csv \
+  --java-kw-csv WFGStudy/statistics/kruskal_wallis_cells.csv \
+  --java-dunn-csv WFGStudy/statistics/dunn_holm_posthoc_pairs.csv \
+  --output-comparison-csv WFGStudy/statistics/r_vs_java_validation.csv
 ```

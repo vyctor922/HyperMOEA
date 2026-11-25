@@ -549,8 +549,8 @@ Antes de iniciar qualquer bateria de testes ou o experimento final (etapa de ava
 - **R (Opcional para scripts R do jMetal e `kruskal_dunn_holm.R`):** R `4.x` com `Rscript` disponível no `PATH`.
 - **LaTeX (Opcional para compilar tabelas `.tex`):** `pdflatex` com pacotes `colortbl`, `booktabs` e `amsmath`.
 
-Comandos de verificação rápida no PowerShell:
-```powershell
+Comandos de verificação rápida (**Windows CMD / PowerShell / Git Bash / Linux Bash**):
+```bash
 java -version
 mvn -version
 ```
@@ -572,20 +572,20 @@ Confirme que os diretórios canônicos e protegidos existem na raiz do projeto:
 
 ## 2. Compilação e Execução dos Testes Automatizados
 
-### 2.1. Compilação Limpa do Projeto
-```powershell
+### 2.1. Compilação Limpa do Projeto (**Windows CMD / PowerShell / Git Bash / Linux Bash**)
+```bash
 mvn clean test-compile
 ```
 
-### 2.2. Execução da Suíte de Testes Unitários e de Pré-Voo
+### 2.2. Execução da Suíte de Testes Unitários e de Pré-Voo (**Windows CMD / PowerShell / Git Bash / Linux Bash**)
 Para rodar todos os testes exceto o teste legado em regressão (`MoeaddWeightValidationTest`):
-```powershell
+```bash
 mvn test "-Dtest=!MoeaddWeightValidationTest"
 ```
 > **Nota:** Os **361 testes** das demais 22 classes de teste (`NsgaIIIReferencePointsValidationTest`, `ParetoFrontValidationTest`, `QualityIndicatorUnitTest`, `AlgorithmIntegrationTest`, `R2ExecutionObserverTest`, `EvaluationBudgetAuditTest`, `FdeaIdentityAndLegacyAuditTest`, `IsolationAndReproducibilityTest`, `ReferenceFrontPhysicalAndMathAuditTest`, `NormalizationAndHvContractTest`, `ResultFrontContractTest`, `MonteCarloHypervolumeTest`, `ProcessIsolatedHypervolumeTest`, `KruskalWallisTestTest`, `PerformanceProfilerPhase3Test`, `WFGStudyPreflightTest`, `ReferenceFrontCanonicalPriorityTest`, `CanonicalArtifactResolutionAndManifestTest`, etc.) passam com **0 falhas**.
 
-Para inspecionar especificamente a falha atual de `MoeaddWeightValidationTest`:
-```powershell
+Para inspecionar especificamente a falha atual de `MoeaddWeightValidationTest` (**Windows CMD / PowerShell / Git Bash / Linux Bash**):
+```bash
 mvn test "-Dtest=MoeaddWeightValidationTest"
 ```
 
@@ -619,18 +619,34 @@ Antes de disparar horas de processamento, execute 1 run de 1 problema (`WFG1`) e
 > [!WARNING]
 > Conforme as regras de [AGENTS.md](file:///c:/Users/vyctor922/Downloads/Mestrado/tema/experimento/java/hypeMOEA/AGENTS.md), **nunca grave testes exploratórios na raiz de `WFGStudy/`**. Use `WFGStudy/tests/...` e lembre-se de que, sem a correção do `GenerateLatexTablesWithStatistics` (Pendência #4 no topo), o comando abaixo concluirá `ExecuteAlgorithms` e `ComputeQualityIndicators` (gerando todos os dados e o `QualityIndicatorSummary.csv`), mas lançará `FileNotFoundException` apenas no passo final de geração do `.tex`.
 
-```powershell
-mvn exec:java `
-  "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" `
-  "-Dstudy.outputDirectory=WFGStudy/tests/smoke_wfg1_2d" `
-  "-Druns=1" `
-  "-Dobjectives=2" `
+* **No Windows `CMD` (`cmd.exe`)**:
+```bash
+mvn exec:java ^
+  "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" ^
+  "-Dstudy.outputDirectory=WFGStudy/tests/smoke_wfg1_2d" ^
+  "-Druns=1" ^
+  "-Dobjectives=2" ^
+  "-Dproblem=WFG1"
+```
+
+* **No `Linux Bash` ou `Git Bash` (Windows)**:
+```bash
+mvn exec:java \
+  "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" \
+  "-Dstudy.outputDirectory=WFGStudy/tests/smoke_wfg1_2d" \
+  "-Druns=1" \
+  "-Dobjectives=2" \
   "-Dproblem=WFG1"
 ```
 
 Após verificar que `WFGStudy/tests/smoke_wfg1_2d/QualityIndicatorSummary.csv` foi gerado corretamente, remova o diretório de smoke test:
-```powershell
-Remove-Item -Path "WFGStudy/tests/smoke_wfg1_2d" -Recurse -Force
+* **No Windows `CMD` (`cmd.exe`)**:
+```bash
+rmdir /s /q "WFGStudy\tests\smoke_wfg1_2d"
+```
+* **No `Linux Bash` ou `Git Bash` (Windows)**:
+```bash
+rm -rf "WFGStudy/tests/smoke_wfg1_2d"
 ```
 
 ---
@@ -644,41 +660,79 @@ Devido ao custo exponencial do indicador de Hipervolume exato (`PISAHypervolume`
 Esta bateria é rápida e segura mesmo com o `PISAHypervolume` exato:
 
 1. **Somente `m = 2, 3` (WFG1–WFG9 e DTLZ1–DTLZ7 padrão):**
-   ```powershell
-   $env:MAVEN_OPTS="-Xms4g -Xmx8g"
-   mvn exec:java `
-     "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" `
-     "-Dstudy.outputDirectory=WFGStudy" `
-     "-Druns=30" `
-     "-Dobjectives=2,3" `
-     "-DreplaceZeroWeights=false" `
+   * **No Windows `CMD` (`cmd.exe`)**:
+   ```bash
+   set MAVEN_OPTS=-Xms4g -Xmx8g
+   mvn exec:java ^
+     "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" ^
+     "-Dstudy.outputDirectory=WFGStudy" ^
+     "-Druns=30" ^
+     "-Dobjectives=2,3" ^
+     "-DreplaceZeroWeights=false" ^
+     "-DreplaceZeroFronts=false"
+   ```
+   * **No `Linux Bash` ou `Git Bash` (Windows)**:
+   ```bash
+   export MAVEN_OPTS="-Xms4g -Xmx8g"
+   mvn exec:java \
+     "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" \
+     "-Dstudy.outputDirectory=WFGStudy" \
+     "-Druns=30" \
+     "-Dobjectives=2,3" \
+     "-DreplaceZeroWeights=false" \
      "-DreplaceZeroFronts=false"
    ```
 
 2. **Dimensão `m = 5` (incluindo DTLZ1–DTLZ7 com `-DgenerateAllReferenceFronts=true`):**
-   ```powershell
-   $env:MAVEN_OPTS="-Xms4g -Xmx8g"
-   mvn exec:java `
-     "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" `
-     "-Dstudy.outputDirectory=WFGStudy" `
-     "-Druns=30" `
-     "-Dobjectives=5" `
-     "-DgenerateAllReferenceFronts=true" `
-     "-DreplaceZeroWeights=false" `
+   * **No Windows `CMD` (`cmd.exe`)**:
+   ```bash
+   set MAVEN_OPTS=-Xms4g -Xmx8g
+   mvn exec:java ^
+     "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" ^
+     "-Dstudy.outputDirectory=WFGStudy" ^
+     "-Druns=30" ^
+     "-Dobjectives=5" ^
+     "-DgenerateAllReferenceFronts=true" ^
+     "-DreplaceZeroWeights=false" ^
+     "-DreplaceZeroFronts=false"
+   ```
+   * **No `Linux Bash` ou `Git Bash` (Windows)**:
+   ```bash
+   export MAVEN_OPTS="-Xms4g -Xmx8g"
+   mvn exec:java \
+     "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" \
+     "-Dstudy.outputDirectory=WFGStudy" \
+     "-Druns=30" \
+     "-Dobjectives=5" \
+     "-DgenerateAllReferenceFronts=true" \
+     "-DreplaceZeroWeights=false" \
      "-DreplaceZeroFronts=false"
    ```
 
 #### Lote B: Dimensão `m = 8` (30 runs)
 Em $m=8$ ($N=156$, $1.000$ a $1.500$ gerações), o tempo de execução dos algoritmos e do `PISAHypervolume` aumenta moderadamente (~35 ms por frente no WFG HV):
-```powershell
-$env:MAVEN_OPTS="-Xms4g -Xmx12g"
-mvn exec:java `
-  "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" `
-  "-Dstudy.outputDirectory=WFGStudy" `
-  "-Druns=30" `
-  "-Dobjectives=8" `
-  "-DgenerateAllReferenceFronts=true" `
-  "-DreplaceZeroWeights=false" `
+* **No Windows `CMD` (`cmd.exe`)**:
+```bash
+set MAVEN_OPTS=-Xms4g -Xmx12g
+mvn exec:java ^
+  "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" ^
+  "-Dstudy.outputDirectory=WFGStudy" ^
+  "-Druns=30" ^
+  "-Dobjectives=8" ^
+  "-DgenerateAllReferenceFronts=true" ^
+  "-DreplaceZeroWeights=false" ^
+  "-DreplaceZeroFronts=false"
+```
+* **No `Linux Bash` ou `Git Bash` (Windows)**:
+```bash
+export MAVEN_OPTS="-Xms4g -Xmx12g"
+mvn exec:java \
+  "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" \
+  "-Dstudy.outputDirectory=WFGStudy" \
+  "-Druns=30" \
+  "-Dobjectives=8" \
+  "-DgenerateAllReferenceFronts=true" \
+  "-DreplaceZeroWeights=false" \
   "-DreplaceZeroFronts=false"
 ```
 
@@ -690,28 +744,54 @@ mvn exec:java `
 > 3. Nota sobre `W15D_135.dat`: A resolução canônica (`ReferenceSetValidator.resolveCanonicalWeightFile`) já localiza (ou gera analiticamente sob demanda) `resources/weightVectorFiles/weights_gen/W15D_135.dat`, sem necessidade de apontar para a pasta legada `MOEAD_Weights/`, visto que ela é protegida para não ser usada exceto em testes legados e apenas leitura, não copia de seus dados para outras pastas.
 
 Comando para $m=10$:
-```powershell
-$env:MAVEN_OPTS="-Xms6g -Xmx14g"
-mvn exec:java `
-  "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" `
-  "-Dstudy.outputDirectory=WFGStudy" `
-  "-Druns=30" `
-  "-Dobjectives=10" `
-  "-DgenerateAllReferenceFronts=true" `
-  "-DreplaceZeroWeights=false" `
+* **No Windows `CMD` (`cmd.exe`)**:
+```bash
+set MAVEN_OPTS=-Xms6g -Xmx14g
+mvn exec:java ^
+  "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" ^
+  "-Dstudy.outputDirectory=WFGStudy" ^
+  "-Druns=30" ^
+  "-Dobjectives=10" ^
+  "-DgenerateAllReferenceFronts=true" ^
+  "-DreplaceZeroWeights=false" ^
+  "-DreplaceZeroFronts=false"
+```
+* **No `Linux Bash` ou `Git Bash` (Windows)**:
+```bash
+export MAVEN_OPTS="-Xms6g -Xmx14g"
+mvn exec:java \
+  "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" \
+  "-Dstudy.outputDirectory=WFGStudy" \
+  "-Druns=30" \
+  "-Dobjectives=10" \
+  "-DgenerateAllReferenceFronts=true" \
+  "-DreplaceZeroWeights=false" \
   "-DreplaceZeroFronts=false"
 ```
 
 Comando para $m=15$:
-```powershell
-$env:MAVEN_OPTS="-Xms6g -Xmx14g"
-mvn exec:java `
-  "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" `
-  "-Dstudy.outputDirectory=WFGStudy" `
-  "-Druns=30" `
-  "-Dobjectives=15" `
-  "-DgenerateAllReferenceFronts=true" `
-  "-DreplaceZeroWeights=false" `
+* **No Windows `CMD` (`cmd.exe`)**:
+```bash
+set MAVEN_OPTS=-Xms6g -Xmx14g
+mvn exec:java ^
+  "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" ^
+  "-Dstudy.outputDirectory=WFGStudy" ^
+  "-Druns=30" ^
+  "-Dobjectives=15" ^
+  "-DgenerateAllReferenceFronts=true" ^
+  "-DreplaceZeroWeights=false" ^
+  "-DreplaceZeroFronts=false"
+```
+* **No `Linux Bash` ou `Git Bash` (Windows)**:
+```bash
+export MAVEN_OPTS="-Xms6g -Xmx14g"
+mvn exec:java \
+  "-Dexec.mainClass=br.usp.lti.newmoea.study.WFGStudy" \
+  "-Dstudy.outputDirectory=WFGStudy" \
+  "-Druns=30" \
+  "-Dobjectives=15" \
+  "-DgenerateAllReferenceFronts=true" \
+  "-DreplaceZeroWeights=false" \
   "-DreplaceZeroFronts=false"
 ```
 

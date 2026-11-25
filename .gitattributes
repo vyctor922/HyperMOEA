@@ -1,0 +1,12 @@
+# Preserva os bytes exatos (CRLF) dos artefatos científicos auditados por SHA-256
+# em qualquer sistema operacional (Linux, macOS, Windows), garantindo 100% de
+# paridade nos testes de integridade após git clone / git checkout.
+resources/weightVectorFiles/**/*.dat text eol=crlf
+resources/referenceFronts/**/*.csv text eol=crlf
+MOEAD_Weights/**/*.dat text eol=crlf
+pareto_fronts/**/*.csv text eol=crlf
+pareto_fronts/**/*.pf text eol=crlf
+
+# Scripts R e shell sempre com LF para execução direta no Linux / Git Bash
+*.R text eol=lf
+*.sh text eol=lf
